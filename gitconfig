@@ -24,8 +24,9 @@
 	dh = diff HEAD
 	diffall = diff HEAD
 	dm = !git diff | mate
-	dp4 = difftool --tool=p4diff
-	dpdf = difftool --tool=diffpdf
+	p4diff = difftool --tool=p4diff
+	pdfdiff = difftool --tool=diffpdf
+	ksdiff = difftool --tool=ksdiff
 	dv = !git diff | vim
 	dw = diff --word-diff
 	empty-tree-sha1 = hash-object -t tree /dev/null
@@ -170,11 +171,16 @@
 	helper = cache --timeout 3600
 
 [diff]
-	# algorithm = patience
-	# ignoresubmodules = untracked
-	# mnemonicprefix = true
-	# renames = copies
-	external = extDiff
+	algorithm = patience
+	ignoresubmodules = untracked
+	mnemonicprefix = true
+	renames = copies
+
+[difftool "extdiff"]
+	cmd = extdiff \"$LOCAL\" \"$REMOTE\"
+
+[difftool "ksdiff"]
+	cmd = ksdiff \"$LOCAL\" \"$REMOTE\"
 
 [difftool "diffpdf"]
 	cmd = diffpdf \"$LOCAL\" \"$REMOTE\"
