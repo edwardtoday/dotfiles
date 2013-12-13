@@ -3,9 +3,6 @@
 # Install Homebrew formulae with:
 #  brew bundle ~/.Brewfile
 
-# Check for problems
-doctor
-
 # Make sure we’re using the latest Homebrew
 update
 
@@ -25,15 +22,16 @@ install wget --enable-iri
 
 # Install RingoJS and Narwhal
 # Note that the order in which these are installed is important; see http://git.io/brew-narwhal-ringo.
-install ringojs
-install narwhal
+#install ringojs
+#install narwhal
 
 # Install more recent versions of some OS X tools
-install vim --override-system-vi
+install vim --override-system-vi --with-python3 --with-perl --with-tcl --with-client-server
+install macvim --custom-icons --override-system-vim --with-python3
 tap homebrew/dupes
 install homebrew/dupes/grep
 tap josegonzalez/homebrew-php
-install php55
+# install php55
 
 # This formula didn’t work well last time I tried it:
 #install homebrew/dupes/screen
@@ -45,6 +43,7 @@ install git
 #install imagemagick
 install lynx
 install node
+install pandoc
 install pigz
 install rename
 install rhino
@@ -53,7 +52,16 @@ install webkit2png
 install zopfli
 
 tap homebrew/versions
-install lua52
+#install lua52
 
 # Remove outdated versions from the cellar
 cleanup
+
+# Install Brew Cask
+tap phinze/homebrew-cask
+install brew-cask
+
+cask install google-chrome
+cask install calibre
+cask install ksdiff
+cask install p4merge
