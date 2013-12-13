@@ -206,12 +206,15 @@
 	summary = true
 	# Include summaries of merged commits in newly created merge commit messages
 	log = true
+	tool = p4merge
 
 [mergetool]
 	trustExitCode = false
+	prompt = false
+	keepBackup = false
 
 [mergetool "p4merge"]
-	cmd = p4merge \"$BASE\" \"$LOCAL\" \"$REMOTE\" \"$MERGED\"
+	path = p4merge
 
 [pack]
 	threads = 0
