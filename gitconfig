@@ -151,7 +151,6 @@
         untracked = cyan
 [core]
 	autocrlf = input
-	editor = emacs -nw
 	excludesfile = ~/.gitignore
 	attributesfile = ~/.gitattributes
 	pager = less -F -X
