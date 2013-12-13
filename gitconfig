@@ -246,47 +246,9 @@
 [url "https://github.com/edwardtoday/"]
 	insteadOf = "ghhe://"
 	pushInsteadOf = "ghhe://"
+
 [user]
 	name = Pei Qing 卿培
-	email = qingpei@sansitech.com
+	email = edwardtoday@gmail.com
 	signingkey = 92A10211
-[github]
-	user = =
-	token = =
-	password = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
-	user = =
-	token = =
+
