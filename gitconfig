@@ -110,7 +110,7 @@
 	spull = !git-svn fetch && git-svn rebase
 	spush = !git-svn dcommit
 	squash = "!sh -c 'git commit -m \"squash! $(git log -1 --format='\\''%s'\\'' $@)\"' -"
-	st = status
+	st = status -uno
 	sync = !git pull && git push
 	tagcontains = git tag -l --contains HEAD
 	tips = "!_() { t=$(git rev-list --no-merges --max-count=1 \"$@\"); if test -n \"$t\"; then echo $t; _ \"$@\" ^$t; fi; }; _"
