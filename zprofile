@@ -10,7 +10,6 @@ source ~/.profile
 HISTFILE=~/.zsh_history     # Where to save history to disk
 setopt APPEND_HISTORY # adds history
 setopt AUTO_CONTINUE     # Background processes aren't killed on exit of shell
-setopt autocd
 setopt COMPLETE_IN_WORD
 setopt CORRECT
 setopt correctall        # correction
