@@ -1,0 +1,9 @@
+[submodule "bin/fast-export"]
+	path = bin/fast-export
+	url = http://repo.or.cz/r/fast-export.git
+[submodule "bin/gist-encode"]
+	path = bin/gist-encode
+	url = https://gist.github.com/6230790.git
+[submodule "oh-my-zsh"]
+	path = oh-my-zsh
+	url = https://github.com/robbyrussell/oh-my-zsh.git
