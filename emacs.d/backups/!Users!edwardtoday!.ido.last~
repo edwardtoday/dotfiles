@@ -1,0 +1,65 @@
+;;; -*- coding: utf-8 -*-
+
+;; ----- ido-last-directory-list -----
+(
+ ("/Users/edwardtoday/Dropbox/Workspace/" . "scripts/")
+ ("/Users/edwardtoday/Dropbox/PolyU/KDD/report/" . "odor_optimization/")
+ ("/Users/edwardtoday/Dropbox/PolyU/" . "KDD/")
+ ("/Users/edwardtoday/Dropbox/" . "Workspace/")
+ ("/Users/edwardtoday/" . ".emacs.d/")
+ ("/Users/edwardtoday/.emacs.d/" . "edwardtoday/")
+)
+
+;; ----- ido-work-directory-list -----
+(
+ "/Users/edwardtoday/Dropbox/Workspace/scripts/"
+ "/Users/edwardtoday/"
+ "/Users/edwardtoday/Dropbox/PolyU/KDD/report/odor_optimization/"
+ "/Users/edwardtoday/Dropbox/PolyU/KDD/"
+ "/Users/edwardtoday/github/image-converter-for-kindle/"
+ "/Users/edwardtoday/.emacs.d/"
+ "/Users/edwardtoday/.emacs.d/edwardtoday/"
+)
+
+;; ----- ido-work-file-list -----
+(
+ "pip_upgrade_all.py"
+ ".shellaliases"
+ "odor_optimization.md"
+ "KDD Schedule.md"
+ "kdd_notes.md"
+ "convert2kindless.py"
+ "init.el"
+ "custom.el"
+)
+
+;; ----- ido-dir-file-cache -----
+(
+ ("/Users/edwardtoday/Dropbox/Workspace/scripts/" (20872 52494 0 0) "update_rfc" "SwapLastFirstNameOnSelectedContacts.scpt" "SetUniqueEmailLabelToWork.scpt" "Remove Space and Dash from Phone Numbers.scpt" "Remove Phone Numbers Containing.scpt" "Remove Names in Contact Notes.scpt" "Remove Duplicate Phone Numbers.scpt" "Remove Duplicate Addresses.scpt" "pypod_q07.py" "pypod_air.py" "pip_upgrade_all.py" "OpenTerminalHere.app/" "OpenInTextMate.app/" "mmcat" "markdown-pygments.py" "manual_update" "linearize-pdf" "LaTeXTidy-0.31.pl" "install-google-fonts-mac" "img4web" "html5video" "googlefontexclude.txt" "git-remove-history" "gb2utf8.py" "fast-export/" "clone-virtuos-projects" "Append Country Code.scpt" ".DS_Store" "../" "./")
+
+ ("/Users/edwardtoday/" (20872 52977 0 0) "wekafiles/" "weka.log" "Public/" "Pictures/" "Music/" "Movies/" "Library/" "Google Drive/" "github/" "Dropbox/" "Downloads/" "Documents/" "Desktop/" "chromedriver.log" "BTSync/" "Applications/" ".zshrc.pre-oh-my-zsh" ".zshrc" ".zshenv" ".zsh_history" ".zsh-update" ".zprofile" ".zlogout" ".zdirstore" ".zcompdump" ".Xauthority" ".vimrc" ".viminfo" ".vim/" ".vagrant.d/" ".Trash/" ".t.weibo.emacs.d/" ".subversion/" ".ssh/" ".shellvars" ".shellpaths" ".shellaliases" ".rvm/" ".rubinius_last_error" ".rnd" ".recently-used" ".recentf" ".RapidMiner5/" ".python27_compiled/" ".profile" ".pip/" ".oh-my-zsh/" ".npm/" ".netrc" ".mplayer/" ".matplotlib/" ".matlab/" ".m2/" ".local/" ".lighttable/" ".lesshst" ".keepassx/" ".ido.last" ".idlerc/" ".hgrc" ".gnuplot_history" ".gitignore_global" ".gitconfig" ".gem/" ".FontForge/" ".fakeThunder_cd9a9050ea10df7c4b7b31a444f10f3c.txt" ".emacs.d/" ".eclipse_keyring" ".ec2/" ".DS_Store" ".dropbox/" ".directory_history/" ".cups/" ".ctags" ".config/" ".codeintel/" ".cmd-key-happy.lua" ".CFUserTextEncoding" ".cache/" ".bashrc" ".bash_profile" ".bash_history" ".aspell.en.pws" ".aspell.en.prepl" ".ascii.io/" "../" "./")
+
+ ("/Users/edwardtoday/Dropbox/Workspace/" (20871 32022 0 0) "xcode/" "vagrant/" "TopCoder/" "scripts/" "R/" "org/" "latex/" "_opensource/" ".DS_Store" "../" "./")
+
+ ("/Users/edwardtoday/Dropbox/" (20871 52216 0 0) "家庭共享/" "奶瓶/" "Workspace/" "TextExpander/" "Swap/" "Readings/" "Public/" "PolyU/" "Photos/" "Icon
+" "EC2/" "dotfiles/" "Documents/" "backup/" ".DS_Store" ".dropbox.cache/" "../" "./")
+
+ ("/Users/edwardtoday/Dropbox/PolyU/KDD/report/odor_optimization/" (20834 27561 0 0) "plots_pdf/" "odor_optimization_slides.pdf" "odor_optimization.pdf" "odor_optimization.md" "odor_opt.xlsx" "gnuplot/" "DimensionReduction/" ".DS_Store" "../" "./")
+
+ ("/Users/edwardtoday/Dropbox/PolyU/KDD/report/" (20834 27561 0 0) "tables/" "plots_pdf/" "over-fitting/" "odor_optimization/" "gnuplot/" "Fusion_classification_edwardtoday.pptx" "Feature_selection.pptx" "Comparison_classification_edwardtoday.pptx" "Comparison_classification_edwardtoday.pdf" "2013.01_Report_V2.ppt" ".DS_Store" "../" "./")
+
+ ("/Users/edwardtoday/Dropbox/PolyU/KDD/" (20837 5519 0 0) "update_kdd_notes.sh" "stylesheets/" "src/" "report/" "README.md" "proposal/" "MatlabData/" "lib/" "kdd_notes.md" "KDD Schedule.md" "features/" ".gitignore" ".gitattributes" ".git/" ".DS_Store" "../" "./")
+
+ ("/Users/edwardtoday/github/image-converter-for-kindle/" (20834 30658 0 0) "convert2kindless.py" ".idea/" ".git/" "../" "./")
+
+ ("/Users/edwardtoday/.emacs.d/" (20830 46911 0 0) "thumbs/" "places" "init.el" "elpa/" "edwardtoday/" "auto-save-list/" "ac-comphist.dat" "abbrev_defs" ".smex-items" ".DS_Store" "../" "./")
+
+ ("/Users/edwardtoday/.emacs.d/edwardtoday/" (20828 8337 0 0) "custom.el" ".DS_Store" "../" "./")
+
+ ("/Users/edwardtoday/Dropbox/PolyU/" (20821 61724 0 0) "粤语/" "PR_course/" "KDD/" "BRC_book/" "Archive/" ".DS_Store" "../" "./")
+
+ ("/Users/edwardtoday/Dropbox/Workspace/org/" (20825 46875 0 0) "Retrospect-qingpei.org" "Retrospect-qingpei.html" "ref/" "polyu_notes.org" "gtd.org_archive" "gtd.org" "cashflow.org" ".DS_Store" "../" "./")
+)
+
+;; ----- ido-unc-hosts-cache -----
+t

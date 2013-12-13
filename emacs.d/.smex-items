@@ -1,0 +1,64 @@
+
+;; ----- smex-history -----
+(
+ menu-bar-mode
+ toggle-word-wrap
+ repeat
+ toggle-truncate-lines
+ shell
+ view-file
+ package-install
+)
+
+;; ----- smex-data -----
+(
+ (package-install . 35)
+ (eval-buffer . 1)
+ (server-start . 2)
+ (gtd . 30)
+ (load-theme . 1)
+ (org-mode . 1)
+ (grep-find . 1)
+ (shell-command . 3)
+ (exec-path-from-shell-initialize . 1)
+ (python-mode . 1)
+ (package-list-packages . 3)
+ (package-initialize . 1)
+ (package-refresh-contents . 1)
+ (color-theme-heroku . 1)
+ (color-theme-github . 2)
+ (cd . 2)
+ (byte-compile-file . 1)
+ (byte-recompile-directory . 1)
+ (markdown-mode . 3)
+ (iwb . 17)
+ (undo . 3)
+ (org-reload . 1)
+ (make-face-bold . 1)
+ (markdown-blockquote-region . 1)
+ (yank . 1)
+ (auto-composition-mode . 2)
+ (auto-complete-mode . 4)
+ (global-auto-complete-mode . 4)
+ (customize . 2)
+ (toggle-word-wrap . 8)
+ (toggle-truncate-lines . 5)
+ (markdown-insert-image . 1)
+ (indent-region . 1)
+ (weibo-timeline . 1)
+ (org-tags-view . 1)
+ (org-set-tags . 1)
+ (edit-tab-stops . 1)
+ (erc-truncate-buffer . 1)
+ (fill-region . 1)
+ (fill-paragraph . 2)
+ (complete-symbol . 1)
+ (completion-at-point . 1)
+ (view-file . 1)
+ (markdown-preview . 1)
+ (shell . 1)
+ (doxymacs-insert-file-comment . 1)
+ (repeat . 1)
+ (color-theme-ir-black . 1)
+ (menu-bar-mode . 2)
+)

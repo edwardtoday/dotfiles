@@ -1,0 +1,12 @@
+---
+last_check: {}
+checked_completion: true
+completion_version: 1.6.3
+endpoints:
+  https://api.travis-ci.org/:
+    access_token: 
+repos:
+  edwardtoday/sansi-book:
+    endpoint: https://api.travis-ci.org/
+  edwardtoday/git-scribe:
+    endpoint: https://api.travis-ci.org/

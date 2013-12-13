@@ -1,0 +1,25 @@
+_hgroot="https://googlefontdirectory.googlecode.com/hg/"
+_hgrepo="/Users/edwardtoday/Downloads/googlefontdirectory"
+
+echo "Connecting to Mercurial server...."
+if [ -d "$_hgrepo" ] ; then
+    cd $_hgrepo
+    hg pull -u || return 1
+    echo "The local files have been updated."
+    cd ..
+else
+    hg clone $_hgroot $_hgrepo || return 1
+fi
+echo "Mercurial checkout done or server timeout"
+
+cd $_hgrepo
+tar -zvcf ~/Downloads/googlewebfonts.tgz -X ~/Dropbox/Workspace/scripts/googlefontexclude.txt *
+
+# mkdir -p ~/Downloads/Fonts/ttf/
+# mkdir -p ~/Downloads/Fonts/otf/
+# find $_hgrepo/ -name "*.otf" -exec sudo cp {} ~/Downloads/Fonts/otf/ \; || return 1
+# find $_hgrepo/ -name "*.ttf" -exec sudo cp {} ~/Downloads/Fonts/ttf/ \; || return 1
+# fc-cache -f > /dev/null
+# echo "cleanup..."
+# rm -rf _hgrepo
+echo "done."

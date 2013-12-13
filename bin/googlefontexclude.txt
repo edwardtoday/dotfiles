@@ -1,0 +1,28 @@
+.hg*
+md5sum
+*.ff
+*.log
+*.menu
+*.menu2
+*.png
+.DS_Store
+
+# skip non-font directories
+designers/
+src/
+tools/
+Sources/
+sources/
+src_old/
+archive/
+
+# skip build files (I think?)
+*.*latin
+*.*ext
+*.arabic
+*.hebrew
+*.japanese
+*.thai
+*.cyrillic
+*.nam
+*.afm

@@ -1,0 +1,39 @@
+#!/bin/sh
+
+PROG=$0
+RSYNC="/usr/local/bin/rsync"
+SRC="/"
+DST="/Volumes/Backup/"
+EXCLUDE="$HOME/.bin/rsync_excludes.txt"
+
+# -v increase verbosity
+# -a turns on archive mode (recursive copy + retain attributes)
+# -x don't cross device boundaries (ignore mounted volumes)
+# -S handles spare files efficiently
+# -H preserves hard-links
+# -X preserves ACLs and Resource Forks
+# -h human readable output and progress
+# --delete deletes any files that have been deleted locally
+# --delete-excluded deletes any files that are part of the list of excluded files
+# --exclude-from reference a list of files to exclude
+
+if [ ! -r "$SRC" ]; then
+  /usr/bin/logger -t $PROG "Source $SRC not readable - Cannot start the sync process"
+  exit;
+fi
+
+if [ ! -w "$DST" ]; then
+  /usr/bin/logger -t $PROG "Destination $DST not writeable - Cannot start the sync process"
+  exit;
+fi
+
+/usr/bin/logger -t $PROG "Start rsync"
+
+sudo $RSYNC -vax -S -H -X -h --delete --exclude-from=$EXCLUDE "$SRC" "$DST"
+
+/usr/bin/logger -t $PROG "End rsync"
+
+# make the backup bootable
+sudo bless -folder "$DST"/System/Library/CoreServices
+
+exit 0

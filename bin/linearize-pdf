@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+
+# linearize pdf files in current folder (optimized for web view)
+for f in *.pdf
+do
+	qpdf --linearize $f qpdf.$f
+	mv qpdf.$f $f
+done

@@ -1,0 +1,50 @@
+#!/usr/bin/env sh
+
+# Resize all photos in the current directory.
+# Save the output to ./processed
+SIZE="1280x1280"
+
+if [ ! -d ./processed ]; then mkdir ./processed; fi;
+
+# creates the screen image
+for f in *.jpg;
+do
+    echo "Resizing $f"
+    convert -strip -resize $SIZE  \
+        "$f" "./processed/$f"
+done
+
+if ls | grep tif; then for g in *.tif;
+    do
+        echo "Resizing $g"
+        convert -strip -resize $SIZE \
+            "$g" "./processed/${g/.tif}.jpg"
+    done
+fi
+
+if ls | grep png; then for h in *.png;
+    do
+        echo "Resizing $h"
+        convert -strip -resize $SIZE \
+            "$h" "./processed/${h/.png}.jpg"
+    done
+fi
+
+cd ./processed
+
+# Watermark and change the image names
+count=1
+for i in *.jpg;
+do
+    echo "Watermarking $i"
+    composite -watermark 30% -gravity southeast \
+        ~/Dropbox/Photos/logo/watermark/watermark_qingpei.me_light_256.png "$i" "$i"
+# Don't know why imagemagick report error saying it is unable to open the image if I use a variable to store the watermark filename.
+    sequencename=$(printf "%02d.jpg" $count)
+    let count=count+1
+    echo $sequencename
+    mv "$i" $sequencename
+done
+
+# optimize image
+imgopt .

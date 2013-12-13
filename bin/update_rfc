@@ -1,0 +1,4 @@
+#!/bin/sh
+#rsync ftp.rfc-editor.org::
+rsync -avz --delete ftp.rfc-editor.org::rfcs-text-only rfc_collection
+#rsync -avz --delete ftp.rfc-editor.org::everything-ftp rfc_collection

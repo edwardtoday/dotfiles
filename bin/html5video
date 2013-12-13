@@ -1,0 +1,29 @@
+#!/bin/sh                        
+
+####################################
+#  Output file for HTML5 video    #
+#  Requirements:                  #
+#    - handbrakecli               #
+#    - ffmpeg                     #
+#    - ffmpeg2theora              #
+#                                 #
+#  usage:                         #
+#   ./html5video.sh infile.mp4    #
+#                                 #
+###################################
+
+target_directory='converted'
+file=`basename $1`
+filename=${file%.*}
+filepath=`dirname $1`
+destination="$filepath/$target_directory"
+
+if ! test -d "$destination"
+then
+	mkdir $destination
+fi
+
+HandBrakeCLI -i $1 -o $destination/$filename.mp4 --encoder x264 --vb 900 --ab 128 --optimize
+ffmpeg2theora $destination/$filename.mp4
+# mv $destination/$filename.ogv $destination/$filename.ogg
+ffmpeg -i $destination/$filename.mp4 -acodec libvorbis -vcodec libvpx $destination/$filename.webm

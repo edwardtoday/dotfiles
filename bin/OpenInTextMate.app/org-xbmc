@@ -1,0 +1,25 @@
+#!/usr/bin/python
+
+import sys, os, commands
+
+def linkfile(src):
+    output = commands.getoutput("mp4info '%s'" % src)
+    season = 0
+    episode = 0
+    for line in output.splitlines():
+        sl = line.strip()
+        if sl.startswith("TV Season"):
+            season = int(sl.split(":")[1].strip())
+        elif sl.startswith("TV Episode"):
+            episode = int(sl.split(":")[1].strip())
+
+    if season and episode:
+        ext = os.path.splitext(src)[1]
+        dst = "%s/%dx%02x%s" % (os.path.dirname(src), season, episode, ext)
+        print src, "->", dst
+        if not os.path.islink(dst):
+            os.symlink(src, dst)
+
+for root, dirs, files in os.walk(sys.argv[1]):
+    for name in files:
+        linkfile(os.path.join(root, name))

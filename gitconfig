@@ -1,0 +1,292 @@
+[alias]
+	# ref: https://git.wiki.kernel.org/index.php?title=Aliases
+	abbr = "!sh -c 'git rev-list --all | grep ^$1 | while read commit; do git --no-pager log -n1 --pretty=format:\"%H %ci %an %s%n\" $commit; done' -"
+	aliases = !git config --get-regexp 'alias.*' | colrm 1 6 | sed 's/[ ]/ = /'
+	blg = log --graph --decorate --all --abbrev-commit --pretty=oneline
+	br = branch -a
+	busypeople = shortlog -6
+	busythisweek = shortlog --since=one.week.ago
+	c = commit
+	cam = commit -a -m
+	cc-cache = "config --global credential.helper 'cache --timeout=300'"
+	cc-helperlin = "config --global credential.helper '/pathto/git-credential-gnome-key'"
+	cc-helperosx = "config --global credential.helper 'osxkeychain'"
+	cc-helperwin = "config --global credential.helper 'wincred'"
+	cc-off = "config --unset --global credential.helper"
+	ccfq = "!sh -c 'git add $1 && git commit -m\"Placeholder\"' -"
+	cl = log --stat -C -2
+	co = checkout
+	cob = checkout -b
+	cs = status
+	d = diff --color-words
+	dc = diff --staged
+	dcw = diff --color-words
+	dh = diff HEAD
+	diffall = diff HEAD
+	dm = !git diff | mate
+	dp4 = difftool --tool=p4diff
+	dpdf = difftool --tool=diffpdf
+	dv = !git diff | vim
+	dw = diff --word-diff
+	empty-tree-sha1 = hash-object -t tree /dev/null
+	es = !git pull --rebase && git push
+	fetchnotes = !sh -c 'git fetch $1 refs/notes/*:refs/notes/*' -
+	findjuniodeletes = log --author=Junio --diff-filter=D --since=2.years.ago
+	fixup = "!sh -c 'git commit -m \"fixup! $(git log -1 --format='\\''%s'\\'' $@)\"' -"
+	gc-ap = gc --aggressive --prune
+	graphviz = "!f() { echo 'digraph git {' ; git log --pretty='format:  %h -> { %p }' \"$@\" | sed 's/[0-9a-f][0-9a-f]*/\"&\"/g' ; echo '}'; }; f"
+	gwcl = log --graph --all --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative
+	hse = log --stat -5
+	ignorechanges = update-index --assume-unchanged
+	k = !exec gitk --all&
+	l = log --stat -C
+	l1 = log --graph --all --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset' --abbrev-commit --date=relative
+	l2 = log --graph --all --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative
+	l3 = log --graph --all --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative
+	legitbranches = !legit branches
+	legitgraft = !legit graft \"$@\"
+	legitharvest = !legit harvest \"$@\"
+	legitpublish = !legit publish \"$@\"
+	legitsprout = !legit sprout \"$@\"
+	legitswitch = !legit switch \"$@\"
+	legitsync = !legit sync \"$@\"
+	legitunpublish = !legit unpublish \"$@\"
+	lf = log --pretty=fuller
+	lg = log --graph
+	lgso = log --graph --date=short --pretty=format:'%C(yellow)%h%Creset %cn%x09%cd %s%C(green bold)%d'
+	listconf = config --global --list
+	listhistory = log --name-status
+	liststaged = diff --name-status --staged
+	listunstaged = diff --name-status
+	ll = log --stat -C -3
+	lm = log --stat -M
+	lod = log --oneline --decorate
+	logcpy = log --stat -1 -C -C
+	logfive = log --graph --pretty=oneline --abbrev-commit --decorate --all -5
+	logit = log --stat -M
+	logm = log --stat -M
+	logme = log --author=Matthew --stat -C
+	logn = log --oneline --name-only
+	logr = log -M
+	logr2 = log --stat -M -2
+	logsimple = log --graph --abbrev-commit --pretty=oneline --all --decorate
+	lol = log --pretty=oneline --graph --abbrev-commit --all
+	lp = log -p
+	lpo = log --pretty=oneline --abbrev-commit --graph --decorate --all
+	lsm = log -M --stat
+	lwr = log --stat -C
+	mergekeepoursonly = merge -s ours
+	noticechanges = update-index --no-assume-unchanged
+	oneline ="!_() { $(test $# -eq 0 && echo xargs -L1) git log --no-walk --decorate --oneline \"$@\"; }; _"
+	orphank = !gitk --all `git reflog | cut -c1-7`&
+	orphanl = !git log --pretty=oneline --abbrev-commit --graph --decorate `git reflog | cut -c1-7`
+	patchforthis = "!git diff -p $(git empty-tree-sha1)"
+	ph = push
+	pl = pull
+	prunenow = gc --prune=now
+	pub = push -u origin
+	pubdev = !git pub checkout master && git pull && git checkout dev && git rebase master && git checkout master && git merge dev && git wtf
+	pullsvn = svn rebase
+	pur = pull --rebase
+	purgeme = !git clean -fd && git reset --hard
+	pushnotes = !sh -c 'git push $1 refs/notes/*' -
+	pushsvn = svn dcommit
+	redocommit = reset --soft HEAD^
+	ri = rebase --interactive --autosquash
+	rlog = log --color-words --stat -3
+	rmmissing = !git rm $(git ls-files --deleted)
+	ro = !git fetch origin && git reset --hard origin/master
+	rtheirs = !git checkout --theirs ./ && git add . && git rebase --continue
+	rv = remote -v
+	s = status -u -s
+	scrub = !git reset --hard && git clean -fd
+	servehere = daemon --verbose --informative-errors --reuseaddr --export-all --base-path=. --enable=receive-pack
+	shorten = "!sh -c 'curl -i http://git.io -F url=$1' -"
+	showignored = clean -ndX
+	showignored2 = ls-files --others --ignored --exclude-standard
+	showuntracked = ls-files --others --exclude-standard
+	slog = log --graph --simplify-by-decoration --all --abbrev-commit --pretty=oneline
+	sno = show --name-only
+	spull = !git-svn fetch && git-svn rebase
+	spush = !git-svn dcommit
+	squash = "!sh -c 'git commit -m \"squash! $(git log -1 --format='\\''%s'\\'' $@)\"' -"
+	st = status
+	sync = !git pull && git push
+	tagcontains = git tag -l --contains HEAD
+	tips = "!_() { t=$(git rev-list --no-merges --max-count=1 \"$@\"); if test -n \"$t\"; then echo $t; _ \"$@\" ^$t; fi; }; _"
+	whatis = show -s --pretty='tformat:%h (%s, %ad)' --date=short
+	whitespaceviolations = "!git diff --check $(git empty-tree-sha1)"
+	who = shortlog -s --
+
+[advice]
+	pushNonFastForward = false
+	statusHints = false
+
+[apply]
+	# Detect whitespace errors when applying a patch
+	whitespace = fix
+
+[branch]
+	autosetupmerge = true
+
+[color]
+	# Use colors in Git commands that are capable of colored output when
+	# outputting to the terminal. (This is the default setting in Git ≥ 1.8.4.)
+	ui = auto
+
+[color "branch"]
+        current = yellow reverse
+        local = yellow
+        remote = green
+
+[color "diff"]
+        meta = yellow bold
+        frag = magenta bold
+        old = red bold
+        new = green bold
+
+[color "status"]
+        added = yellow
+        changed = green
+        untracked = cyan
+[core]
+	autocrlf = input
+	editor = emacs -nw
+	excludesfile = ~/.gitignore
+	attributesfile = ~/.gitattributes
+	pager = less -F -X
+	quotepath = false
+	safecrlf = warn
+	# Treat spaces before tabs, lines that are indented with 8 or more spaces, and
+	# all kinds of trailing whitespace as an error.
+	# [default] trailing-space: looks for spaces at the end of a line
+	# [default] space-before-tab: looks for spaces before tabs at the beginning of
+	# a line
+	whitespace = trailing-space,space-before-tab
+	# Make `git rebase` safer on OS X
+	# More info: <http://www.git-tower.com/blog/make-git-rebase-safe-on-osx/>
+	trustctime = false
+
+[credential]
+	helper = cache --timeout 3600
+
+[diff]
+	# algorithm = patience
+	# ignoresubmodules = untracked
+	# mnemonicprefix = true
+	# renames = copies
+	external = extDiff
+
+[difftool "diffpdf"]
+	cmd = diffpdf \"$LOCAL\" \"$REMOTE\"
+
+[gist]
+	browse = yes
+	private = yes
+
+[gui]
+	encoding = utf-8
+
+[help]
+	autocorrect = true
+
+[hub]
+	protocol = https
+
+[i18n]
+	commitencoding = utf-8
+
+[merge]
+	stat = true
+	summary = true
+	# Include summaries of merged commits in newly created merge commit messages
+	log = true
+
+[mergetool]
+	trustExitCode = false
+
+[mergetool "p4merge"]
+	cmd = p4merge \"$BASE\" \"$LOCAL\" \"$REMOTE\" \"$MERGED\"
+
+[pack]
+	threads = 0
+
+[push]
+	default = upstream
+
+[remote "origin"]
+	push = HEAD
+
+[rerere]
+	enabled = true
+	autoupdate = true
+
+[url "git://github.com/"]
+	insteadOf = "ghg://"
+	pushInsteadOf = "ghg://"
+	# Example: git clone ghg://edwardtoday/dotfiles
+
+[url "git://github.com/edwardtoday/"]
+	insteadOf = "ghge://"
+	pushInsteadOf = "ghge://"
+	# Example: git clone ghge://mymaxim
+
+[url "git@github.com:"]
+	insteadOf = "ghs://"
+	pushInsteadOf = "ghs://"
+
+[url "git@github.com:edwardtoday/"]
+	insteadOf = "ghse://"
+	pushInsteadOf = "ghse://"
+
+[url "https://github.com/"]
+	insteadOf = "ghh://"
+	pushInsteadOf = "ghh://"
+
+[url "https://github.com/edwardtoday/"]
+	insteadOf = "ghhe://"
+	pushInsteadOf = "ghhe://"
+[user]
+	name = Pei Qing 卿培
+	email = qingpei@sansitech.com
+	signingkey = 92A10211
+[github]
+	user = =
+	token = =
+	password = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =
+	user = =
+	token = =

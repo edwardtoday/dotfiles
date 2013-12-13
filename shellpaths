@@ -1,0 +1,47 @@
+########################################################################
+# Shell agnostic path setup
+########################################################################
+
+export MANPATH="/usr/local/man:/usr/local/mysql/man:/usr/local/git/man:$MANPATH"
+
+# edwardtoday's Scripts
+export PATH=.:$PATH
+export PATH=~/.bin:$PATH
+
+# System
+export PATH=/bin:$PATH
+export PATH=/sbin:$PATH
+export PATH=/usr/bin:$PATH
+export PATH=/usr/sbin:$PATH
+
+# Brew
+export PATH=/usr/local/bin:$PATH
+export PATH=/usr/local/sbin:$PATH
+export PATH=/opt/local/bin:$PATH
+
+# TeX
+export PATH=/usr/texbin:$PATH
+
+# X11
+export PATH=/usr/X11/bin:$PATH
+
+# Python
+# export PATH=/usr/local/opt/python/bin:$PATH
+# export PATH=/usr/local/share/python:$PATH
+# export PATH=/usr/local/share/python3:$PATH
+
+# Ruby
+export PATH=/usr/local/opt/ruby/bin:$PATH
+
+# Qt
+export PATH=$HOME/Qt5.1.1/5.1.1/gcc_64/bin:$PATH
+
+# Go
+export PATH=$PATH:/usr/local/go/bin
+export GOPATH=$HOME/go
+export PATH=$PATH:$GOPATH/bin
+
+# CCache
+export PATH=/usr/lib64/ccache:$PATH
+
+fpath=(/usr/local/share/zsh-completions $fpath)

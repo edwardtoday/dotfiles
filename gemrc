@@ -1,0 +1,9 @@
+---
+:benchmark: fasle
+:backtrace: false
+:bulk_threshold: 1000
+:update_sources: true
+:verbose: true
+:sources:
+- http://ruby.taobao.org/
+- http://gems.github.com/
