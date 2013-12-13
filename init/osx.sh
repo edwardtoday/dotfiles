@@ -20,8 +20,6 @@ fi
 export HOMEBREW_CASK_OPTS="--appdir=/Applications"
 
 if [[ "$(type -P brew)" ]]; then
-  echo "Updating Homebrew"
-
   brew bundle ~/.Brewfile
 
   # This is where brew stores its binary symlinks
