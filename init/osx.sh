@@ -24,3 +24,6 @@ if [[ "$(type -P brew)" ]]; then
 fi
 
 ln -s ~/.bin/p4merge.sh /usr/local/bin/p4merge
+
+# Use Keychain for git auth
+git config --global credential.helper osxkeychain
