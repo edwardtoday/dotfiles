@@ -166,9 +166,6 @@
 	# More info: <http://www.git-tower.com/blog/make-git-rebase-safe-on-osx/>
 	trustctime = false
 
-[credential]
-	helper = cache --timeout 3600
-
 [diff]
 	# algorithm = patience
 	# ignoresubmodules = untracked
