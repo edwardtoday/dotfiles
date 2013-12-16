@@ -1,2 +1,0 @@
-#!/bin/bash
-p4merge "$2" "$5"
