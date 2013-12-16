@@ -168,7 +168,7 @@
 	trustctime = false
 
 [credential]
-	helper = osxkeychain
+	helper = cache
 
 [diff]
 	algorithm = patience
@@ -193,7 +193,7 @@
 	encoding = utf-8
 
 [help]
-	autocorrect = true
+	autocorrect = 1
 
 [hub]
 	protocol = https
