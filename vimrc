@@ -132,3 +132,6 @@ noremap <leader>ss :call StripWhitespace()<CR>
 " Save a file as root (,W)
 noremap <leader>W :w !sudo tee % > /dev/null<CR>
 
+if has('gui_running')
+  set guifont=Inconsolata\ 14
+endif
