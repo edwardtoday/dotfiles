@@ -168,7 +168,7 @@
 	trustctime = false
 
 [credential]
-	helper = osxkeychain
+	helper = cache
 
 [diff]
 	algorithm = patience
@@ -260,6 +260,6 @@
 
 [user]
 	name = Pei Qing 卿培
-	email = edwardtoday@gmail.com
+	email = qingpei@sansitech.com
 	signingkey = 92A10211
 
