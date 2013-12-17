@@ -185,6 +185,9 @@
 [difftool "diffpdf"]
 	cmd = diffpdf \"$LOCAL\" \"$REMOTE\"
 
+[difftool "p4diff"]
+	cmd = p4merge \"$LOCAL\" \"$REMOTE\"
+
 [gist]
 	browse = yes
 	private = yes
