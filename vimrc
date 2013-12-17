@@ -1,3 +1,25 @@
+filetype off
+
+set rtp+=~/.vim/bundle/vundle/
+call vundle#rc()
+
+" let Vundle manage Vundle
+" required! 
+Bundle 'gmarik/vundle'
+
+" My bundles here:
+"
+" original repos on GitHub
+Bundle 'tpope/vim-fugitive'
+Bundle 'Lokaltog/vim-easymotion'
+" vim-scripts repos
+Bundle 'L9'
+Bundle 'FuzzyFinder'
+" non-GitHub repos
+Bundle 'git://git.wincent.com/command-t.git'
+
+filetype plugin indent on     " required!
+
 " Make Vim more useful
 set nocompatible
 " Use the OS clipboard by default (on versions compiled with `+clipboard`)
@@ -87,10 +109,3 @@ noremap <leader>ss :call StripWhitespace()<CR>
 " Save a file as root (,W)
 noremap <leader>W :w !sudo tee % > /dev/null<CR>
 
-" Automatic commands
-if has("autocmd")
-        " Enable file type detection
-        filetype on
-        " Treat .json files as .js
-        autocmd BufNewFile,BufRead *.json setfiletype json syntax=javascript
-endif
