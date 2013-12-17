@@ -133,5 +133,7 @@ noremap <leader>ss :call StripWhitespace()<CR>
 noremap <leader>W :w !sudo tee % > /dev/null<CR>
 
 if has('gui_running')
-  set guifont=Inconsolata\ 14
+  set guifont=Droid\ Sans\ Mono\ 13
 endif
+
+let g:DoxygenToolkit_authorName="Pei Qing 卿培 edwardtoday@gmail.com"
