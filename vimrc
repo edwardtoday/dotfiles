@@ -140,4 +140,4 @@ if has('gui_running')
   set guifont=Droid\ Sans\ Mono\ 13
 endif
 
-let g:DoxygenToolkit_authorName="Pei Qing 卿培 qingpei@sansitech.com"
+let g:DoxygenToolkit_authorName="Pei Qing <qingpei@sansitech.com>"
