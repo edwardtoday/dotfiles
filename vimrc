@@ -38,7 +38,8 @@ Bundle 'UltiSnips'
 " 让代码更加易于纵向排版，以=或,符号对齐
 Bundle 'Tabular'
 " 迄今位置最好的自动VIM自动补全插件了吧
-Bundle 'Valloric/YouCompleteMe'
+" disabled due to "Caught deadly signal SEGV"
+" Bundle 'Valloric/YouCompleteMe'
 Bundle 'DoxygenToolkit.vim'
 Bundle 'plasticboy/vim-markdown'
 Bundle 'asciidoc.vim'
