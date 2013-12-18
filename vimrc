@@ -87,6 +87,8 @@ syntax on
 set cursorline
 " Make tabs as wide as two spaces
 set tabstop=2
+set shiftwidth=2
+set expandtab
 " Show “invisible” characters
 set lcs=tab:▸\ ,trail:·,eol:¬,nbsp:_
 set list
@@ -138,4 +140,4 @@ if has('gui_running')
   set guifont=Droid\ Sans\ Mono\ 13
 endif
 
-let g:DoxygenToolkit_authorName="Pei Qing 卿培 edwardtoday@gmail.com"
+let g:DoxygenToolkit_authorName="Pei Qing 卿培 qingpei@sansitech.com"
