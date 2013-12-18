@@ -40,6 +40,8 @@ Bundle 'Tabular'
 " 迄今位置最好的自动VIM自动补全插件了吧
 Bundle 'Valloric/YouCompleteMe'
 Bundle 'DoxygenToolkit.vim'
+Bundle 'plasticboy/vim-markdown'
+Bundle 'asciidoc.vim'
 
 filetype plugin indent on     " required!
 
