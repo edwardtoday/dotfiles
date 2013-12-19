@@ -24,8 +24,9 @@
 	dh = diff HEAD
 	diffall = diff HEAD
 	dm = !git diff | mate
-	dp4 = difftool --tool=p4diff
-	dpdf = difftool --tool=diffpdf
+	p4diff = difftool --tool=p4diff
+	pdfdiff = difftool --tool=diffpdf
+	ksdiff = difftool --tool=ksdiff
 	dv = !git diff | vim
 	dw = diff --word-diff
 	empty-tree-sha1 = hash-object -t tree /dev/null
@@ -167,17 +168,25 @@
 	trustctime = false
 
 [credential]
-	helper = cache --timeout 3600
+	helper = cache
 
 [diff]
-	# algorithm = patience
-	# ignoresubmodules = untracked
-	# mnemonicprefix = true
-	# renames = copies
-	external = extDiff
+	algorithm = patience
+	ignoresubmodules = untracked
+	mnemonicprefix = true
+	renames = copies
+
+[difftool "extdiff"]
+	cmd = extdiff \"$LOCAL\" \"$REMOTE\"
+
+[difftool "ksdiff"]
+	cmd = ksdiff \"$LOCAL\" \"$REMOTE\"
 
 [difftool "diffpdf"]
 	cmd = diffpdf \"$LOCAL\" \"$REMOTE\"
+
+[difftool "p4diff"]
+	cmd = p4merge \"$LOCAL\" \"$REMOTE\"
 
 [gist]
 	browse = yes
@@ -187,7 +196,7 @@
 	encoding = utf-8
 
 [help]
-	autocorrect = true
+	autocorrect = 1
 
 [hub]
 	protocol = https
@@ -200,12 +209,15 @@
 	summary = true
 	# Include summaries of merged commits in newly created merge commit messages
 	log = true
+	tool = p4merge
 
 [mergetool]
 	trustExitCode = false
+	prompt = false
+	keepBackup = false
 
 [mergetool "p4merge"]
-	cmd = p4merge \"$BASE\" \"$LOCAL\" \"$REMOTE\" \"$MERGED\"
+	path = p4merge
 
 [pack]
 	threads = 0
