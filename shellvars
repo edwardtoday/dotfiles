@@ -22,7 +22,6 @@ export ALTERNATE_EDITOR='emacs -nw'
 # Tool settings
 #########################################################################
 export CLICOLOR=true
-export GREP_OPTIONS='--color=auto'
 export SSL_CERT_FILE="$HOME/.certs/cacert.pem"
 
 export HISTSIZE=1000               # How many lines of history to keep in memory
