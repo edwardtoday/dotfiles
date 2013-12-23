@@ -61,8 +61,8 @@
     },
     {
 //  use --generate-secret in command line to create new secret
-      "secret" : "AXS6FNZL6YILGFO5QPZVB3BP7RJNBOKUR",                   // * required field
-      "dir" : "/home/qingpei/ReadingList", // * required field
+      "secret" : "A6734RFXDQZKD5VNDS6TOP4UEGFPI646O",                   // * required field
+      "dir" : "/home/qingpei/Reading", // * required field
 
 //  use relay server when direct connection fails
       "use_relay_server" : true,
