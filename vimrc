@@ -1,4 +1,10 @@
+" Some Linux distributions set filetype in /etc/vimrc.
+  " Clear filetype flags before changing runtimepath to force Vim to reload them.
 filetype off
+filetype plugin indent off
+
+" enable golang official plugin
+set runtimepath+=$GOROOT/misc/vim
 
 set rtp+=~/.vim/bundle/vundle/
 call vundle#rc()
@@ -42,6 +48,7 @@ Bundle 'Valloric/YouCompleteMe'
 Bundle 'DoxygenToolkit.vim'
 Bundle 'plasticboy/vim-markdown'
 Bundle 'asciidoc.vim'
+Bundle 'majutsushi/tagbar'
 
 filetype plugin indent on     " required!
 
@@ -141,3 +148,34 @@ if has('gui_running')
 endif
 
 let g:DoxygenToolkit_authorName="Pei Qing <qingpei@sansitech.com>"
+
+nmap <F8> :TagbarToggle<CR>
+
+let g:tagbar_type_go = {
+    \ 'ctagstype' : 'go',
+    \ 'kinds'     : [
+        \ 'p:package',
+        \ 'i:imports:1',
+        \ 'c:constants',
+        \ 'v:variables',
+        \ 't:types',
+        \ 'n:interfaces',
+        \ 'w:fields',
+        \ 'e:embedded',
+        \ 'm:methods',
+        \ 'r:constructor',
+        \ 'f:functions'
+    \ ],
+    \ 'sro' : '.',
+    \ 'kind2scope' : {
+        \ 't' : 'ctype',
+        \ 'n' : 'ntype'
+    \ },
+    \ 'scope2kind' : {
+        \ 'ctype' : 't',
+        \ 'ntype' : 'n'
+    \ },
+    \ 'ctagsbin'  : 'gotags',
+    \ 'ctagsargs' : '-sort -silent'
+\ }
+
