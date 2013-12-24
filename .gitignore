@@ -1,1 +1,3 @@
 emacs.d/ac-comphist.dat
+vim/bundle
+!vim/bundle/vundle
