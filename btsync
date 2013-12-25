@@ -61,24 +61,6 @@
     },
     {
 //  use --generate-secret in command line to create new secret
-      "secret" : "A6734RFXDQZKD5VNDS6TOP4UEGFPI646O",                   // * required field
-      "dir" : "/home/qingpei/Reading", // * required field
-
-//  use relay server when direct connection fails
-      "use_relay_server" : true,
-      "use_tracker" : true, 
-      "use_dht" : true,
-      "search_lan" : true,
-//  enable SyncArchive to store files deleted on remote devices
-      "use_sync_trash" : false,
-//  specify hosts to attempt connection without additional search     
-      "known_hosts" :
-      [
-        "192.168.1.2:44444"
-      ]
-    },
-    {
-//  use --generate-secret in command line to create new secret
       "secret" : "AOJD3YJCPCF7V75ZEE4Z5BNRID25KW7EO",                   // * required field
       "dir" : "/home/qingpei/log@202.11.11.162", // * required field
 
