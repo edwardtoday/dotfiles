@@ -1,7 +1,5 @@
 #!/usr/bin/env ruby
 
-system ("git pull")
-
 # Inspired by http://errtheblog.com/posts/89-huba-huba
 
 # This is idempotent, meaning you can run it over and over again without fear of
