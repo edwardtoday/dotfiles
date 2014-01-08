@@ -109,9 +109,6 @@ alias network.enableftp='sudo -s launchctl load -w /System/Library/LaunchDaemons
 # Track who is listening to your iTunes music
 alias network.whotunes='lsof -r 2 -n -P -F n -c iTunes -a -i TCP@`hostname`:3689'
 
-# Flush the DNS on Mac
-alias network.dnsflush=dscacheutil -flushcache && killall -HUP mDNSResponder
-
 # Files used, anywhere on the filesystem
 alias files.usage='sudo fs_usage -e -f filesystem|grep -v CACHE_HIT|grep -v grep'
 # Files being opened
