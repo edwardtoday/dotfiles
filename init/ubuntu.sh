@@ -41,7 +41,7 @@ packages=(
   git-core
   tree sl id3tool cowsay
   nmap telnet
-  htop
+  htop python-vte
 )
 
 list=()
