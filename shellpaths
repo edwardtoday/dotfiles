@@ -41,7 +41,7 @@ export PATH=$HOME/Qt5.1.1/5.1.1/gcc_64/bin:$PATH
 
 # Go
 export PATH=$PATH:/usr/local/go/bin
-export GOPATH=$HOME/go
+export GOPATH=$HOME/workspace/go
 export GOROOT=/usr/local/go
 export PATH=$PATH:$GOPATH/bin
 
