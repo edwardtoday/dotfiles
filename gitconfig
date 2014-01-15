@@ -167,9 +167,6 @@
 	# More info: <http://www.git-tower.com/blog/make-git-rebase-safe-on-osx/>
 	trustctime = false
 
-[credential]
-	helper = osxkeychain
-
 [diff]
 	algorithm = patience
 	ignoresubmodules = untracked
