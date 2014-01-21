@@ -16,9 +16,6 @@ alias h="history"
 alias e='emacsclient -t -a ""'
 alias ec='emacsclient -c -a ""'
 
-# mosh
-alias moshaws='mosh --ssh="ssh -i ~/.ssh/qpaws.pem" ubuntu@aws.qingpei.me'
-
 # find all .git directories and exec "git pull" on the parent.
 alias grl='find . -type d -name .git -exec sh -c "cd \"{}\"/../ && pwd && git pull" \;'
 
@@ -182,4 +179,6 @@ alias update.pip3distribute='cd ~/Downloads && curl -O http://python-distribute.
 # Get OS X Software Updates, and update installed Ruby gems, Homebrew, npm, and their installed packages
 alias update='sudo softwareupdate -i -a; brew update; brew upgrade; brew cleanup; npm update npm -g; npm update -g; sudo gem update --system; sudo gem update; sudo tlmgr update --self; sudo tlmgr update --all; sudo ~/.bin/pip_upgrade_all.py; sudo ~/.bin/pip3_upgrade_all.py'
 
+# rdesktop to GCBSERVER
+alias gcbserver='rdesktop -u qingpei -p qpsansi -x 0x80 -g 1400x840 202.11.11.162 &'
 
