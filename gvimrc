@@ -2,4 +2,4 @@
 colorscheme molokai
 " Better line-height
 set linespace=4
-
+set guifont=Ubuntu\ Mono\ 14

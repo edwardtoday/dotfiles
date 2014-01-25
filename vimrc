@@ -143,10 +143,6 @@ noremap <leader>ss :call StripWhitespace()<CR>
 " Save a file as root (,W)
 noremap <leader>W :w !sudo tee % > /dev/null<CR>
 
-if has('gui_running')
-  set guifont=Droid\ Sans\ Mono\ 13
-endif
-
 let g:DoxygenToolkit_authorName="Pei Qing <qingpei@sansitech.com>"
 
 nmap <F8> :TagbarToggle<CR>
