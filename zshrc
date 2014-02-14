@@ -41,7 +41,7 @@ then
 	plugins=(command-coloring autojump osx brew bower git git-extras git-flow python scala pip dirpersist history history-substring-search terminalapp ruby gem)
 else
 	# Not on mac, using ssh-agent plugin
-	plugins=(command-coloring ssh-agent dirpersist git git-extras git-flow history history-substring-search)
+	plugins=(command-coloring ssh-agent dirpersist git-extras git-flow history history-substring-search)
 fi
 
 source $ZSH/oh-my-zsh.sh
