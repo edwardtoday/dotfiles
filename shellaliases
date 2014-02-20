@@ -20,7 +20,7 @@ alias ec='emacsclient -c -a ""'
 alias moshaws='mosh --ssh="ssh -i ~/.ssh/qpaws.pem" ubuntu@aws.qingpei.me'
 
 # find all .git directories and exec "git pull" on the parent.
-alias grl='find . -type d -name .git -exec sh -c "cd \"{}\"/../ && pwd && git pull" \;'
+alias grl='find . -type d -name .git | parallel "cd \"{}\"/../ && pwd && git pull"'
 
 # Gzip-enabled `curl`
 alias gurl='curl --compressed'
