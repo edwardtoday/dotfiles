@@ -1,5 +1,5 @@
 " Some Linux distributions set filetype in /etc/vimrc.
-  " Clear filetype flags before changing runtimepath to force Vim to reload them.
+" Clear filetype flags before changing runtimepath to force Vim to reload them.
 filetype off
 filetype plugin indent off
 
@@ -25,8 +25,6 @@ Bundle 'L9'
 Bundle 'FuzzyFinder'
 " 相较于Command-T等查找文件的插件，ctrlp.vim最大的好处在于没有依赖，干净利落
 Bundle 'ctrlp.vim'
-" 在输入()，""等需要配对的符号时，自动帮你补全剩余半个
-Bundle 'AutoClose'
 " 神级插件，ZenCoding可以让你以一种神奇而无比爽快的感觉写HTML、CSS
 Bundle 'ZenCoding.vim'
 " 在()、""、甚至HTML标签之间快速跳转；
@@ -54,8 +52,6 @@ Bundle 'klen/python-mode'
 
 filetype plugin indent on     " required!
 
-" Make Vim more useful
-set nocompatible
 " Use the OS clipboard by default (on versions compiled with `+clipboard`)
 set clipboard=unnamed
 " Enhance command-line completion
@@ -222,3 +218,4 @@ let g:pymode_syntax_space_errors = g:pymode_syntax_all
 
 " Don't autofold code
 let g:pymode_folding = 0
+
