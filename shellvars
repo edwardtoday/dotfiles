@@ -7,10 +7,10 @@ export LANG=en_US.UTF-8
 
 # Set textmate as our default command line editor
 # export EDITOR="/usr/local/bin/mate -w"
-export GIT_EDITOR=vim
-export VISUAL=vim
-export EDITOR=vim
-export ALTERNATE_EDITOR='emacs -nw'
+export GIT_EDITOR=ubl
+export VISUAL=subl
+export EDITOR=subl
+export ALTERNATE_EDITOR='vim'
 
 #########################################################################
 # Tool paths
