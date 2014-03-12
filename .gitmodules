@@ -13,3 +13,6 @@
 [submodule "bin/speedtest-cli"]
 	path = bin/speedtest-cli
 	url = https://github.com/sivel/speedtest-cli
+[submodule "bin/xunlei-lixian"]
+	path = bin/xunlei-lixian
+	url = git://github.com/iambus/xunlei-lixian.git
