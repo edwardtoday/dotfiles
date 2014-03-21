@@ -7,7 +7,7 @@ export LANG=en_US.UTF-8
 
 # Set textmate as our default command line editor
 # export EDITOR="/usr/local/bin/mate -w"
-export GIT_EDITOR=ubl
+export GIT_EDITOR='subl --wait'
 export VISUAL=subl
 export EDITOR=subl
 export ALTERNATE_EDITOR='vim'
