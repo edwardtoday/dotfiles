@@ -182,3 +182,6 @@ alias update='sudo softwareupdate -i -a; brew update; brew upgrade; brew cleanup
 # rdesktop to GCBSERVER
 alias gcbserver='rdesktop -u qingpei -p qpsansi -x 0x80 -g 1400x840 202.11.11.162 &'
 
+# check memory hardware
+alias lsmem="sudo lshw -short -C memory"
+
