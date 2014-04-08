@@ -15,6 +15,7 @@ ZSH_THEME="bira"
 
 # Comment this out to disable bi-weekly auto-update checks
 # DISABLE_AUTO_UPDATE="true"
+DISABLE_UPDATE_PROMPT=true
 
 # Uncomment to change how many often would you like to wait before auto-updates occur? (in days)
 export UPDATE_ZSH_DAYS=13

@@ -180,7 +180,8 @@ alias update.pip3distribute='cd ~/Downloads && curl -O http://python-distribute.
 alias update='sudo softwareupdate -i -a; brew update; brew upgrade; brew cleanup; npm update npm -g; npm update -g; sudo gem update --system; sudo gem update; sudo tlmgr update --self; sudo tlmgr update --all; sudo ~/.bin/pip_upgrade_all.py; sudo ~/.bin/pip3_upgrade_all.py'
 
 # rdesktop to GCBSERVER
-alias gcbserver='rdesktop -u qingpei -p qpsansi -x 0x80 -g 1400x840 202.11.11.162 &'
+alias gcbserver='rdesktop -u qingpei -p qpsansi -x l -z -g 1400x840 202.11.11.162 &'
+alias win7dev='rdesktop -u qingpei -p sansi8033 -x l -z -g 1400x840 202.11.4.64 &'
 
 # check memory hardware
 alias lsmem="sudo lshw -short -C memory"
