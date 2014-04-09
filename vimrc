@@ -43,7 +43,6 @@ Bundle 'Tabular'
 Bundle 'DoxygenToolkit.vim'
 Bundle 'plasticboy/vim-markdown'
 Bundle 'asciidoc.vim'
-Bundle 'YouCompleteMe'
 
 filetype plugin indent on     " required!
 
