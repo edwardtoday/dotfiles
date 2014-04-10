@@ -33,3 +33,9 @@ export LESS_TERMCAP_md="$ORANGE"
 
 # Don’t clear the screen after quitting a manual page
 export MANPAGER="less -X"
+
+# VMware ESXI
+export VI_SERVER="202.11.4.61"
+export VI_USERNAME="root"
+export VI_PASSWORD="DELLroot"
+
