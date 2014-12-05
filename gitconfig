@@ -220,7 +220,7 @@
 	threads = 0
 
 [push]
-	default = upstream
+	default = simple
 
 [remote "origin"]
 	push = HEAD
