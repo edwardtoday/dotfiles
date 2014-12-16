@@ -21,7 +21,6 @@ export ALTERNATE_EDITOR='emacs -nw'
 #########################################################################
 export CLICOLOR=true
 export GREP_OPTIONS='--color=auto'
-export SSL_CERT_FILE="$HOME/.certs/cacert.pem"
 
 export HISTSIZE=1000               # How many lines of history to keep in memory
 export SAVEHIST=$HISTSIZE          # Number of history entries to save to disk
