@@ -33,3 +33,6 @@ setopt RM_STAR_WAIT      # prompts for confirmation after 'rm *' etc
 setopt complete_aliases
 
 zle -N newtab
+
+# for mactex
+eval `/usr/libexec/path_helper -s`

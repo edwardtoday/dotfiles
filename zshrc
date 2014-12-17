@@ -68,3 +68,9 @@ autoload -U compinit
 compinit
 
 autoload colors && colors
+
+# zsh-completions
+fpath=(/usr/local/share/zsh-completions $fpath)
+
+# zsh-syntax-highlighting
+source /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
