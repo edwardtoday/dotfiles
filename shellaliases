@@ -182,7 +182,15 @@ alias svn-clean='pwd && find . -type d -name .svn -print0 | xargs -0 rm -rf'
 #############################################################################
 alias update.pip3distribute='cd ~/Downloads && curl -O http://python-distribute.org/distribute_setup.py && sudo python3 distribute_setup.py && rm distribute_setup.py distribute-*.tar.gz'
 
+alias update.brew='brew update; brew upgrade; brew cleanup; brew prune'
+alias update.mac='sudo softwareupdate -i -a'
+alias update.npm='npm update npm -g; npm update -g'
+alias update.gem='sudo gem update --system; sudo gem update'
+alias update.texlive='sudo tlmgr update --self; sudo tlmgr update --all'
+alias update.pip='sudo ~/.bin/pip_upgrade_all.py'
+alias update.pip3='sudo ~/.bin/pip3_upgrade_all.py'
+
 # Get OS X Software Updates, and update installed Ruby gems, Homebrew, npm, and their installed packages
-alias update='sudo softwareupdate -i -a; brew update; brew upgrade; brew cleanup; npm update npm -g; npm update -g; sudo gem update --system; sudo gem update; sudo tlmgr update --self; sudo tlmgr update --all; sudo ~/.bin/pip_upgrade_all.py; sudo ~/.bin/pip3_upgrade_all.py'
+alias update='update.mac; update.brew; update.texlive'
 
 
