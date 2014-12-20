@@ -214,7 +214,7 @@
 	keepBackup = false
 
 [mergetool "p4merge"]
-	path = p4merge
+	path = /Users/edwardtoday/.bin/p4merge
 
 [pack]
 	threads = 0
