@@ -16,6 +16,12 @@ if [[ ! "$(type -P brew)" ]]; then
   true | ruby -e "$(curl -fsSL https://raw.github.com/mxcl/homebrew/go/install)"
 fi
 
+# Install Homebrew Cask
+
+if [[ "$(type -P brew)" ]]; then
+  sh ~/.cask
+fi
+
 # Link Homebrew casks in `/Applications` rather than `~/Applications`
 export HOMEBREW_CASK_OPTS="--appdir=/Applications"
 

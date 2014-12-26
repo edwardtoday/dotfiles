@@ -69,8 +69,6 @@ fontforge
 fop
 freetype
 fribidi
-fuse4x
-fuse4x-kext
 gd
 gdbm
 gdk-pixbuf
@@ -161,6 +159,7 @@ ssh-copy-id
 svg2pdf
 svg2png
 theora
+tmux
 tree
 ttfautohint
 webkit2png
@@ -169,7 +168,6 @@ x264
 xmlto
 xvid
 xz
-yasm
 youtube-dl
 yuicompressor
 z
