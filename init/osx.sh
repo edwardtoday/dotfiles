@@ -39,3 +39,6 @@ curl -L http://install.ohmyz.sh | sh
 
 # change default shell to zsh
 chsh -s /bin/zsh
+
+# Install Alcatraz | The Package manager for XCode
+curl -fsSL https://raw.github.com/supermarin/Alcatraz/master/Scripts/install.sh | sh
