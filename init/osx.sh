@@ -33,3 +33,9 @@ ln -s ~/.bin/p4merge.sh /usr/local/bin/p4merge
 
 # Use Keychain for git auth
 git config --global credential.helper osxkeychain
+
+# Install oh-my-zsh
+curl -L http://install.ohmyz.sh | sh
+
+# change default shell to zsh
+chsh -s /bin/zsh
