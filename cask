@@ -13,7 +13,7 @@ installcask imageoptim
 # installcask macvim
 # installcask miro-video-converter
 installcask osxfuse
-installcask sublime-text
+# installcask sublime-text
 installcask the-unarchiver
 # installcask tor-browser
 # installcask transmission
