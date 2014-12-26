@@ -20,7 +20,7 @@ fi
 export HOMEBREW_CASK_OPTS="--appdir=/Applications"
 
 if [[ "$(type -P brew)" ]]; then
-  brew bundle ~/.Brewfile
+  brew install $(cat ~/.Brewfile|grep -v "#")
 fi
 
 ln -s ~/.bin/p4merge.sh /usr/local/bin/p4merge
