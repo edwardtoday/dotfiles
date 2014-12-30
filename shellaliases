@@ -194,3 +194,6 @@ alias update.pip3='sudo ~/.bin/pip3_upgrade_all.py'
 alias update='update.mac; update.brew; update.texlive'
 
 
+# BFG Repo-Cleaner
+###############################################################################
+alias bfg='java -jar ~/.bin/bfg.jar'
