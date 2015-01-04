@@ -197,3 +197,7 @@ alias update='update.mac; update.brew; update.texlive'
 # BFG Repo-Cleaner
 ###############################################################################
 alias bfg='java -jar ~/.bin/bfg.jar'
+
+# batch processing
+###############################################################################
+alias batch.md2html='find . -name \*.md -type f -exec pandoc -t html5 -s -o {}.html {} \;'
