@@ -12,7 +12,7 @@ installcask imageoptim
 # installcask iterm2
 # installcask macvim
 # installcask miro-video-converter
-installcask osxfuse
+# installcask osxfuse
 # installcask sublime-text
 installcask the-unarchiver
 # installcask tor-browser
