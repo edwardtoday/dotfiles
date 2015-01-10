@@ -184,7 +184,7 @@ alias update.pip3distribute='cd ~/Downloads && curl -O http://python-distribute.
 
 alias update.brew='brew update; brew upgrade; brew cleanup; brew prune'
 alias update.mac='sudo softwareupdate -i -a'
-alias update.npm='npm update npm -g; npm update -g'
+alias update.npm='npm install -g npm@latest; npm update -g'
 alias update.gem='sudo gem update --system; sudo gem update'
 alias update.texlive='sudo tlmgr update --self; sudo tlmgr update --all'
 alias update.pip='sudo ~/.bin/pip_upgrade_all.py'
@@ -194,3 +194,10 @@ alias update.pip3='sudo ~/.bin/pip3_upgrade_all.py'
 alias update='update.mac; update.brew; update.texlive'
 
 
+# BFG Repo-Cleaner
+###############################################################################
+alias bfg='java -jar ~/.bin/bfg.jar'
+
+# batch processing
+###############################################################################
+alias batch.md2html='find . -name \*.md -type f -exec pandoc -t html5 -s -o {}.html {} \;'

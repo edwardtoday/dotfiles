@@ -19,7 +19,6 @@ wget --enable-iri
 
 # Install more recent versions of some OS X tools
 vim --override-system-vi --with-python3 --with-perl --with-tcl --with-client-server
-macvim --custom-icons --override-system-vim --with-python3
 
 # Install other useful binaries
 ack
