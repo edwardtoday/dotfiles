@@ -154,7 +154,7 @@
 [user]
 	name = Pei Qing 卿培
 	email = edwardtoday@gmail.com
-	signingkey = 92A10211
+	signingkey = AB9760C1
 
 [credential]
 	helper = osxkeychain
