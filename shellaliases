@@ -201,3 +201,5 @@ alias bfg='java -jar ~/.bin/bfg.jar'
 # batch processing
 ###############################################################################
 alias batch.md2html='find . -name \*.md -type f -exec pandoc -t html5 -s -o {}.html {} \;'
+
+alias webkit2png.ios='webkit2png -W 640 --user-agent="Mozilla/5.0 (iPhone; CPU iPhone OS 6_1_4 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10B350 Safari/8536.25"'
