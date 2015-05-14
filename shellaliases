@@ -182,7 +182,7 @@ alias svn-clean='pwd && find . -type d -name .svn -print0 | xargs -0 rm -rf'
 #############################################################################
 alias update.pip3distribute='cd ~/Downloads && curl -O http://python-distribute.org/distribute_setup.py && sudo python3 distribute_setup.py && rm distribute_setup.py distribute-*.tar.gz'
 
-alias update.brew='brew update; brew upgrade; brew cleanup; brew prune'
+alias update.brew='brew update; brew upgrade --all; brew cleanup; brew prune'
 alias update.mac='sudo softwareupdate -i -a'
 alias update.npm='npm install -g npm@latest; npm update -g'
 alias update.gem='sudo gem update --system; sudo gem update'
@@ -191,7 +191,7 @@ alias update.pip='sudo ~/.bin/pip_upgrade_all.py'
 alias update.pip3='sudo ~/.bin/pip3_upgrade_all.py'
 
 # Get OS X Software Updates, and update installed Ruby gems, Homebrew, npm, and their installed packages
-alias update='update.mac; update.brew; update.texlive'
+alias update='parallel -j 0 -- "update.texlive" "update.mac" "update.brew" "update.gem"'
 
 
 # BFG Repo-Cleaner
