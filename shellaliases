@@ -191,7 +191,7 @@ alias update.pip='sudo ~/.bin/pip_upgrade_all.py'
 alias update.pip3='sudo ~/.bin/pip3_upgrade_all.py'
 
 # Get OS X Software Updates, and update installed Ruby gems, Homebrew, npm, and their installed packages
-alias update='parallel -j 0 -- "update.texlive" "update.mac" "update.brew" "update.gem"'
+alias update='update.texlive; update.mac; update.brew;  update.gem;'
 
 
 # BFG Repo-Cleaner
