@@ -1,9 +1,8 @@
 ---
-:benchmark: fasle
 :backtrace: false
 :bulk_threshold: 1000
+:sources:
+- https://ruby.taobao.org/
 :update_sources: true
 :verbose: true
-:sources:
-- http://ruby.taobao.org/
-- http://gems.github.com/
+gem: --no-ri --no-rdoc

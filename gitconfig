@@ -283,10 +283,16 @@
 	whatis = show -s --pretty='tformat:%h (%s, %ad)' --date=short
 	whitespaceviolations = "!git diff --check $(git empty-tree-sha1)"
 	who = shortlog -s --
+
 [https]
 	proxy = socks5://127.0.0.1:1080
 [http]
 	proxy = socks5://127.0.0.1:1080
+# [https]
+# 	proxy = http://127.0.0.1:12345
+# [http]
+# 	proxy = http://127.0.0.1:12345
+
 [filter "hawser"]
 	clean = git hawser clean %f
 	smudge = git hawser smudge %f

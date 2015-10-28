@@ -16,8 +16,9 @@ alias h="history"
 alias e='emacsclient -t -a ""'
 alias ec='emacsclient -c -a ""'
 
-# mosh
-alias moshaws='mosh --ssh="ssh -i ~/.ssh/qpaws.pem" ubuntu@aws.qingpei.me'
+# stellar ssh connections
+alias stellar.mosh="mosh --ssh='ssh -i ~/.ssh/StellarRemoteServerUSWest.pem' ec2-user@remote.sansistellar.com"
+alias stellar.ssh="ssh -i ~/.ssh/StellarRemoteServerUSWest.pem ec2-user@remote.sansistellar.com"
 
 # find all .git directories and exec "git pull" on the parent.
 alias grl='find . -type d -name .git | parallel "cd \"{}\"/../ && pwd && git pull"'
