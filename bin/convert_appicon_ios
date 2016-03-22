@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+
+# Prepare iOS App icons from a large (> 1024x1024) design output.
+# Save the output to ./AppIcon-iOS
+
+if [ ! -d ./AppIcon-iOS ]; then mkdir ./AppIcon-iOS; fi;
+echo "Processing" $1
+convert $1 -resize 120x120\! 	./AppIcon-iOS/Icon-60@2x.png
+convert $1 -resize 180x180\! 	./AppIcon-iOS/Icon-60@3x.png
+convert $1 -resize 167x167\! 	./AppIcon-iOS/Icon-83.5@2x.png
+convert $1 -resize 76x76\! 		./AppIcon-iOS/Icon-76.png
+convert $1 -resize 152x152\! 	./AppIcon-iOS/Icon-76@2x.png
+convert $1 -resize 40x40\! 		./AppIcon-iOS/Icon-Small-40.png
+convert $1 -resize 80x80\! 		./AppIcon-iOS/Icon-Small-40@2x.png
+convert $1 -resize 120x120\! 	./AppIcon-iOS/Icon-Small-40@3x.png
+convert $1 -resize 29x29\! 		./AppIcon-iOS/Icon-Small.png
+convert $1 -resize 58x58\! 		./AppIcon-iOS/Icon-Small@2x.png
+convert $1 -resize 87x87\! 		./AppIcon-iOS/Icon-Small@3x.png
+/Applications/ImageOptim.app/Contents/MacOS/ImageOptim ./AppIcon-iOS/*.png
+echo "App icons are ready at ./AppIcon-iOS"
