@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+
+# Prepare Android App icons from a large (> 1024x1024) design output.
+# Save the output to ./AppIcon-Android
+
+if [ ! -d ./AppIcon-Android ]; then mkdir ./AppIcon-Android; fi;
+echo "Processing" $1
+convert $1 -resize 48x48\! 		./AppIcon-Android/Icon-48.png
+convert $1 -resize 72x72\! 		./AppIcon-Android/Icon-72.png
+convert $1 -resize 96x96\! 		./AppIcon-Android/Icon-96.png
+convert $1 -resize 144x144\! 		./AppIcon-Android/Icon-144.png
+convert $1 -resize 512x512\! 		./AppIcon-Android/Icon-512.png
+convert $1 -resize 1024x1024\! 		./AppIcon-Android/Icon-1024.png
+/Applications/ImageOptim.app/Contents/MacOS/ImageOptim ./AppIcon-Android/*.png
+echo "App icons are ready at ./AppIcon-Android"
