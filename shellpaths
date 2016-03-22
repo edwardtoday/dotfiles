@@ -48,3 +48,4 @@ export PATH=$PATH:$GOPATH/bin
 export PATH=/usr/lib64/ccache:$PATH
 
 fpath=(/usr/local/share/zsh-completions $fpath)
+
