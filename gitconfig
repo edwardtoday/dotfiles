@@ -23,12 +23,12 @@
 	added = yellow
 	changed = green
 	untracked = cyan
-		
+
 [column]
 	ui = auto
 
 [commit]
-	gpgsign = true
+	gpgsign = false
 
 [core]
 	autocrlf = input
@@ -284,14 +284,15 @@
 	whitespaceviolations = "!git diff --check $(git empty-tree-sha1)"
 	who = shortlog -s --
 
-[https]
-	proxy = socks5://127.0.0.1:1080
-[http]
-	proxy = socks5://127.0.0.1:1080
 # [https]
-# 	proxy = http://127.0.0.1:12345
+# 	proxy = socks5://127.0.0.1:1080
 # [http]
-# 	proxy = http://127.0.0.1:12345
+# 	proxy = socks5://127.0.0.1:1080
+
+[http "https://github.com"]
+	proxy = http://127.0.0.1:12345
+[https "https://github.com"]
+	proxy = http://127.0.0.1:12345
 
 [filter "hawser"]
 	clean = git hawser clean %f
