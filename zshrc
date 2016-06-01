@@ -74,3 +74,6 @@ fpath=(/usr/local/share/zsh-completions $fpath)
 
 # zsh-syntax-highlighting
 source /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# awscli completion
+source /usr/local/share/zsh/site-functions/_aws
