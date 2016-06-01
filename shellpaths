@@ -49,3 +49,6 @@ export PATH=/usr/lib64/ccache:$PATH
 
 fpath=(/usr/local/share/zsh-completions $fpath)
 
+# Android
+export ANDROID_HOME=/usr/local/opt/android-sdk
+
