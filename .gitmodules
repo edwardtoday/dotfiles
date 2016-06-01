@@ -4,9 +4,9 @@
 [submodule "bin/gist-encode"]
 	path = bin/gist-encode
 	url = https://gist.github.com/6230790.git
-[submodule "vim/bundle/vundle"]
-	path = vim/bundle/vundle
-	url = https://github.com/gmarik/vundle.git
 [submodule "bin/speedtest-cli"]
 	path = bin/speedtest-cli
 	url = https://github.com/sivel/speedtest-cli.git
+[submodule "vim/bundle/vundle"]
+	path = vim/bundle/vundle
+	url = https://github.com/gmarik/vundle.git
