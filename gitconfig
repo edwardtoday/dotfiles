@@ -218,7 +218,7 @@
 	legitsync = !legit sync \"$@\"
 	legitunpublish = !legit unpublish \"$@\"
 	lf = log --pretty=fuller
-	lg = log --graph
+	lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
 	lgso = log --graph --date=short --pretty=format:'%C(yellow)%h%Creset %cn%x09%cd %s%C(green bold)%d'
 	listconf = config --global --list
 	listhistory = log --name-status
@@ -290,9 +290,9 @@
 # 	proxy = socks5://127.0.0.1:1080
 
 [http "https://github.com"]
-	proxy = http://127.0.0.1:12345
+  proxy = http://127.0.0.1:12345
 [https "https://github.com"]
-	proxy = http://127.0.0.1:12345
+  proxy = http://127.0.0.1:12345
 
 [filter "hawser"]
 	clean = git hawser clean %f
