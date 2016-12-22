@@ -91,6 +91,7 @@
 
 [log]
 	decorate = short
+	mailmap = true
 
 [merge]
 	stat = true
