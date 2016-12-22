@@ -51,3 +51,7 @@ fpath=(/usr/local/share/zsh-completions $fpath)
 # Android
 export ANDROID_HOME=/usr/local/opt/android-sdk
 
+# virtualenv
+export WORKON_HOME=$HOME/.virtualenvs
+source /usr/local/bin/virtualenvwrapper.sh
+
