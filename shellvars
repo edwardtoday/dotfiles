@@ -20,7 +20,6 @@ export ALTERNATE_EDITOR='emacs -nw'
 # Tool settings
 #########################################################################
 export CLICOLOR=true
-export GREP_OPTIONS='--color=auto'
 
 export HISTSIZE=1000               # How many lines of history to keep in memory
 export SAVEHIST=$HISTSIZE          # Number of history entries to save to disk
