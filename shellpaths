@@ -26,11 +26,6 @@ export PATH=/usr/texbin:$PATH
 # X11
 export PATH=/usr/X11/bin:$PATH
 
-# Python
-# export PATH=/usr/local/opt/python/bin:$PATH
-# export PATH=/usr/local/share/python:$PATH
-# export PATH=/usr/local/share/python3:$PATH
-
 # Ruby
 export PATH=/usr/local/opt/ruby/bin:$PATH
 export PATH=$PATH:$HOME/.rvm/bin

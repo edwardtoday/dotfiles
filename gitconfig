@@ -290,16 +290,17 @@
 # [http]
 # 	proxy = socks5://127.0.0.1:1080
 
-[http "https://github.com"]
-  proxy = http://127.0.0.1:12345
-[https "https://github.com"]
-  proxy = http://127.0.0.1:12345
+# [http "https://github.com"]
+#   proxy = http://127.0.0.1:1080
+# [https "https://github.com"]
+#   proxy = http://127.0.0.1:1080
 
 [filter "hawser"]
 	clean = git hawser clean %f
 	smudge = git hawser smudge %f
 	required = true
 [filter "lfs"]
-	clean = git lfs clean %f
-	smudge = git lfs smudge %f
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
 	required = true
