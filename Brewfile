@@ -143,6 +143,8 @@ poppler
 protobuf
 python
 python3
+pyenv-virtualenv
+pyenv-virtualenvwrapper
 qpdf
 qtfaststart
 readline
