@@ -180,20 +180,18 @@ alias svn-clean='pwd && find . -type d -name .svn -print0 | xargs -0 rm -rf'
 #############################################################################
 alias update.pip3distribute='cd ~/Downloads && curl -O http://python-distribute.org/distribute_setup.py && sudo python3 distribute_setup.py && rm distribute_setup.py distribute-*.tar.gz'
 
-alias update.brew='brew update; brew upgrade; brew cleanup; brew prune'
+alias update.brew='brew update; brew upgrade; brew autoremove; brew cleanup --prune=all -s'
 alias update.mac='sudo softwareupdate -i -a'
 alias update.npm='npm install -g npm@latest; npm update -g'
 alias update.gem='sudo gem update --system; sudo gem update'
-alias update.texlive='sudo tlmgr update --self; sudo tlmgr update --all'
+alias update.texlive='sudo tlmgr update --self --all'
 alias update.pip='sudo ~/.bin/pip_upgrade_all.py'
 alias update.pip3='sudo ~/.bin/pip3_upgrade_all.py'
 
+alias fix.brew.permission='sudo chown -R $(whoami):admin $(brew --prefix)/*'
+
 # Get OS X Software Updates, and update installed Ruby gems, Homebrew, npm, and their installed packages
-alias update='update.texlive; update.mac; update.brew;  update.gem;'
-alias cnpm="npm --registry=https://registry.npm.taobao.org \
---cache=$HOME/.npm/.cache/cnpm \
---disturl=https://npm.taobao.org/dist \
---userconfig=$HOME/.cnpmrc"
+alias update='update.texlive; update.mac; update.brew; update.gem;'
 
 # BFG Repo-Cleaner
 ###############################################################################
@@ -213,3 +211,8 @@ alias cnpm="npm --registry=https://registry.npm.taobao.org \
 --cache=$HOME/.npm/.cache/cnpm \
 --disturl=https://npm.taobao.org/dist \
 --userconfig=$HOME/.cnpmrc"
+
+alias fixbrewpermission="sudo chown -R `whoami`:admin /usr/local/bin;sudo chown -R `whoami`:admin /usr/local/share;sudo chown -R `whoami`:admin /usr/local/opt"
+
+
+alias youdl='youtube-dl --proxy socks5://127.0.0.1:7890'
