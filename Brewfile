@@ -1,178 +1,119 @@
-# Install Homebrew with:
-#  ruby -e "$(curl -fsSL https://raw.github.com/mxcl/homebrew/go/install)"
-
-# Install GNU core utilities (those that come with OS X are outdated)
-# Don’t forget to add `$(brew --prefix coreutils)/libexec/gnubin` to `$PATH`.
-coreutils
-# Install GNU `find`, `locate`, `updatedb`, and `xargs`, g-prefixed
-findutils
-# Install Bash 4
-bash
-
-# Install wget with IRI support
-wget --enable-iri
-
-# Install RingoJS and Narwhal
-# Note that the order in which these are installed is important; see http://git.io/brew-narwhal-ringo.
-#ringojs
-#narwhal
-
-# Install more recent versions of some OS X tools
-vim --override-system-vi --with-python3 --with-perl --with-tcl --with-client-server
-
-# Install other useful binaries
-ack
-#exiv2
-git
-#install imagemagick
-lynx
-node
-pigz
-rename
-rhino
-tree
-webkit2png
-
-# previously installed
-aacgain
-asciidoc
-aspell
-astyle
-atk
-autoconf
-autojump
-automake
-bash
-boost
-brew-cask
-cairo
-celt
-cloog
-cmake
-coreutils
-cscope
-curl
-d-bus
-discount
-ditaa
-docbook
-docbook-xsl
-doxygen
-emacs
-faac
-fdk-aac
-ffmpeg
-findutils
-fontconfig
-fontforge
-fop
-freetype
-fribidi
-gd
-gdbm
-gdk-pixbuf
-gettext
-gist
-git
-git-extras
-git-flow
-glib
-gmp
-gnu-getopt
-gnuplot
-gnutls
-go
-gobject-introspection
-graphviz
-grc
-gtk+
-harfbuzz
-hevea
-icu4c
-imagemagick
-isl
-jasper
-jpeg
-jpegoptim
-lame
-latex2rtf
-libass
-libffi
-libgcrypt
-libgpg-error
-libmpc
-libogg
-libpng
-libsvg
-libsvg-cairo
-libtasn1
-libtiff
-libtool
-libvo-aacenc
-libvorbis
-libvpx
-libyaml
-little-cms2
-lua
-mercurial
-mobile-shell
-mp3gain
-mpfr
-netpbm
-nettle
-node
-ntfs-3g
-objective-caml
-opencc
-opencore-amr
-openjpeg
-openssl
-opus
-orc
-osxutils
-p11-kit
-p7zip
-pango
-parallel
-pcre
-pdf2htmlex
-pixman
-pkg-config
-pngcrush
-poppler
-protobuf
-python
-python3
-pyenv-virtualenv
-pyenv-virtualenvwrapper
-qpdf
-qtfaststart
-readline
-ruby
-schroedinger
-scons
-sdl
-shtool
-source-highlight
-speex
-sqlite
-ssh-copy-id
-svg2pdf
-svg2png
-theora
-tmux
-tree
-ttfautohint
-webkit2png
-wget
-x264
-xmlto
-xvid
-xz
-youtube-dl
-yuicompressor
-z
-zsh
-zsh-completions
-zsh-lovers
-zsh-syntax-highlighting
+tap "homebrew/aliases"
+tap "homebrew/bundle"
+tap "homebrew/cask"
+tap "homebrew/cask-fonts"
+tap "homebrew/cask-versions"
+tap "homebrew/core"
+brew "ack"
+brew "annie"
+brew "jpeg"
+brew "libpng"
+brew "webp"
+brew "aria2"
+brew "arp-scan"
+brew "aspell"
+brew "astyle"
+brew "autoconf"
+brew "xz"
+brew "autojump"
+brew "python@3.9"
+brew "awscli"
+brew "bat"
+brew "icu4c"
+brew "boost"
+brew "boost-python3"
+brew "freetype"
+brew "fontconfig"
+brew "glib"
+brew "pkg-config"
+brew "suite-sparse"
+brew "tbb"
+brew "clang-format"
+brew "cloc"
+brew "cmake"
+brew "curl"
+brew "libtool"
+brew "gd"
+brew "composer"
+brew "cppcheck"
+brew "cscope"
+brew "dependency-check"
+brew "dlib"
+brew "exiftool"
+brew "libyaml"
+brew "ruby"
+brew "fastlane", link: false
+brew "libevent"
+brew "unbound"
+brew "gnutls"
+brew "gobject-introspection"
+brew "lame"
+brew "srt"
+brew "x264"
+brew "x265"
+brew "ffmpeg"
+brew "flawfinder"
+brew "fping"
+brew "ghostscript", link: false
+brew "git"
+brew "git-lfs"
+brew "git-sizer"
+brew "gitlab-gem"
+brew "gnupg"
+brew "graphviz"
+brew "hugo"
+brew "python@3.8"
+brew "imagemagick"
+brew "inetutils"
+brew "infer"
+brew "ioping"
+brew "iperf3"
+brew "lynis"
+brew "mas"
+brew "media-info"
+brew "minicom"
+brew "vapoursynth"
+brew "mpv"
+brew "mtr"
+brew "nmap"
+brew "node", link: false
+brew "protobuf"
+brew "opencv"
+brew "pandoc"
+brew "parallel"
+brew "perl"
+brew "pngcrush"
+brew "prettyping"
+brew "pyenv-virtualenv"
+brew "pyenv-virtualenvwrapper"
+brew "qpdf"
+brew "repo"
+brew "semgrep"
+brew "smartmontools"
+brew "speedtest-cli"
+brew "structurizr-cli"
+brew "svg2pdf"
+brew "svg2png"
+brew "sysbench"
+brew "tcping"
+brew "tmux"
+brew "twoping"
+brew "vim"
+brew "webkit2png"
+brew "wget"
+brew "wireshark", link: false
+brew "youtube-dl"
+brew "zlib"
+cask "calibre"
+cask "chromedriver"
+cask "disk-inventory-x"
+cask "fakethunder"
+cask "fastlane"
+cask "font-fontawesome"
+cask "google-cloud-sdk"
+cask "imagealpha"
+cask "pdf-images"
+cask "webpquicklook"
+cask "wireshark"
+cask "xquartz"
+cask "zoom"

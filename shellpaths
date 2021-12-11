@@ -7,6 +7,7 @@ export MANPATH="/usr/local/man:/usr/local/mysql/man:/usr/local/git/man:$MANPATH"
 # edwardtoday's Scripts
 export PATH=.:$PATH
 export PATH=~/.bin:$PATH
+export PATH=~/.bin/tsc_tools_for_mac:$PATH
 
 # System
 export PATH=/bin:$PATH
@@ -19,6 +20,10 @@ export PATH=/usr/local/bin:$PATH
 export PATH=/usr/local/sbin:$PATH
 export PATH=/opt/local/bin:$PATH
 export PATH=/usr/local/opt/findutils/bin:$PATH
+export PATH=/opt/homebrew/bin:$PATH
+
+# curl
+export PATH=/usr/local/opt/curl/bin:$PATH
 
 # TeX
 export PATH=/usr/texbin:$PATH
@@ -37,6 +42,7 @@ export PATH=$HOME/Qt5.1.1/5.1.1/gcc_64/bin:$PATH
 export PATH=$PATH:/usr/local/go/bin
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
+export PATH=$PATH:/usr/local/opt/go/libexec/bin
 
 # CCache
 export PATH=/usr/lib64/ccache:$PATH
@@ -52,3 +58,12 @@ export WORKON_HOME=$HOME/.virtualenvs
 if which pyenv > /dev/null; then eval "$(pyenv init -)"; fi
 if which pyenv-virtualenv-init > /dev/null; then eval "$(pyenv virtualenv-init -)"; fi
 
+export PATH="/usr/local/opt/curl/bin:$PATH"
+export PATH="/usr/local/opt/sqlite/bin:$PATH"
+
+# openssl
+export PATH="/usr/local/opt/openssl@1.1/bin:$PATH"
+
+# fastlane
+export PATH="$HOME/.fastlane/bin:$PATH"
+export PATH="/usr/local/opt/node@8/bin:$PATH"

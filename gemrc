@@ -2,7 +2,12 @@
 :backtrace: false
 :bulk_threshold: 1000
 :sources:
-- https://gems.ruby-china.org/
+- https://rubygems.org
+- https://gems.ruby-china.com/
+- https://anonymous:devcloud@mirrors.huaweicloud.com/repository/rubygems/
+- https://mirrors.aliyun.com/rubygems/
 :update_sources: true
 :verbose: true
+:concurrent_downloads: 8
 gem: "--no-ri --no-rdoc"
+install: -n /usr/local/bin

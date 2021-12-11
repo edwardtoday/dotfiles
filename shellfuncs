@@ -311,3 +311,20 @@ function o() {
 function tre() {
         tree -aC -I '.git|node_modules|bower_components' --dirsfirst "$@" | less -FRNX
 }
+
+function cdf () {
+  finderPath=`osascript -e 'tell application "Finder"
+                               try
+                                   set currentFolder to (folder of the front window as alias)
+                               on error
+                                   set currentFolder to (path to desktop folder as alias)
+                               end try
+                               POSIX path of currentFolder  
+                            end tell'`;
+  cd "$finderPath"
+}
+
+# Usage: compresspdf [input file] [output file] [screen*|ebook|printer|prepress]
+compresspdf() {
+    gs -sDEVICE=pdfwrite -dNOPAUSE -dQUIET -dBATCH -dPDFSETTINGS=/${3:-"screen"} -dCompatibilityLevel=1.4 -sOutputFile="$2" "$1"
+}
