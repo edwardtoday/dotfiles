@@ -1,5 +1,7 @@
-export LC_CTYPE=en_US.UTF-8
 export LANG=en_US.UTF-8
+export LC_CTYPE=en_US.UTF-8
+unset LC_ALL
+
 
 ###################
 # Editor
@@ -21,11 +23,11 @@ export ALTERNATE_EDITOR='emacs -nw'
 #########################################################################
 export CLICOLOR=true
 
-export HISTSIZE=1000               # How many lines of history to keep in memory
-export SAVEHIST=$HISTSIZE          # Number of history entries to save to disk
-export HISTCONTROL=ignoredups      # Make some commands not show up in history
+export HISTSIZE=1000          # How many lines of history to keep in memory
+export SAVEHIST=$HISTSIZE     # Number of history entries to save to disk
+export HISTCONTROL=ignoredups # Make some commands not show up in history
 export HISTIGNORE="ls:cd:cd -:pwd:exit:reset:clear:date:* --help"
-export HISTDUP=erase               # Erase duplicates in the history file
+export HISTDUP=erase # Erase duplicates in the history file
 
 # Highlight section titles in manual pages
 export LESS_TERMCAP_md="$ORANGE"
@@ -33,12 +35,28 @@ export LESS_TERMCAP_md="$ORANGE"
 # Don’t clear the screen after quitting a manual page
 export MANPAGER="less -X"
 
+### Homebrew
+export HOMEBREW_BOOTSNAP=1
+export HOMEBREW_DISPLAY_INSTALL_TIMES=1
 export HOMEBREW_NO_AUTO_UPDATE=1
-
-export PYENV_ROOT="$HOME/.pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init --path)"
+export HOMEBREW_API_DOMAIN="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles/api"
+export HOMEBREW_BOTTLE_DOMAIN="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles"
+export HOMEBREW_BREW_GIT_REMOTE="https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git"
+export HOMEBREW_CORE_GIT_REMOTE="https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/homebrew-core.git"
+export HOMEBREW_PIP_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
 
 export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
 
-export JAVA_HOME=`/usr/libexec/java_home -v 1.8.0_311`
+export JAVA_HOME=$(/usr/libexec/java_home -v 1.8.0_311)
+
+export SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock
+
+# mysql
+export LDFLAGS="-L/opt/homebrew/opt/mysql-client/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/mysql-client/include"
+export PKG_CONFIG_PATH="/opt/homebrew/opt/mysql-client/lib/pkgconfig"
+
+# ZJG SR
+export SR_BASE_URL="https://112.2.46.78:18443"
+export SR_USERNAME="sansi"
+export SR_PASSWORD="Sansi@1280.com"

@@ -1,4 +1,5 @@
 let g:netrw_dirhistmax  =10
-let g:netrw_dirhist_cnt =2
-let g:netrw_dirhist_1='/Users/qingpei'
-let g:netrw_dirhist_2='/Users'
+let g:netrw_dirhistcnt =3
+let g:netrw_dirhist_3='/Users/qingpei/git/4-308'
+let g:netrw_dirhist_2='/Users/qingpei/git/4-308/192.168.1.103'
+let g:netrw_dirhist_1='/Users/qingpei/git/4-308'

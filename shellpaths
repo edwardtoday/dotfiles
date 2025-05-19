@@ -15,16 +15,6 @@ export PATH=/sbin:$PATH
 export PATH=/usr/bin:$PATH
 export PATH=/usr/sbin:$PATH
 
-# Brew
-export PATH=/usr/local/bin:$PATH
-export PATH=/usr/local/sbin:$PATH
-export PATH=/opt/local/bin:$PATH
-export PATH=/usr/local/opt/findutils/bin:$PATH
-export PATH=/opt/homebrew/bin:$PATH
-
-# curl
-export PATH=/usr/local/opt/curl/bin:$PATH
-
 # TeX
 export PATH=/usr/texbin:$PATH
 
@@ -38,32 +28,26 @@ export PATH=$PATH:$HOME/.rvm/bin
 # Qt
 export PATH=$HOME/Qt5.1.1/5.1.1/gcc_64/bin:$PATH
 
-# Go
-export PATH=$PATH:/usr/local/go/bin
-export GOPATH=$HOME/go
-export PATH=$PATH:$GOPATH/bin
-export PATH=$PATH:/usr/local/opt/go/libexec/bin
-
 # CCache
 export PATH=/usr/lib64/ccache:$PATH
-
-fpath=(/usr/local/share/zsh-completions $fpath)
 
 # Android
 export ANDROID_HOME=/usr/local/opt/android-sdk
 
-# virtualenv
-export WORKON_HOME=$HOME/.virtualenvs
-# source /usr/local/bin/virtualenvwrapper.sh
-if which pyenv > /dev/null; then eval "$(pyenv init -)"; fi
-if which pyenv-virtualenv-init > /dev/null; then eval "$(pyenv virtualenv-init -)"; fi
-
-export PATH="/usr/local/opt/curl/bin:$PATH"
-export PATH="/usr/local/opt/sqlite/bin:$PATH"
-
-# openssl
-export PATH="/usr/local/opt/openssl@1.1/bin:$PATH"
-
 # fastlane
 export PATH="$HOME/.fastlane/bin:$PATH"
-export PATH="/usr/local/opt/node@8/bin:$PATH"
+
+# Brew
+export PATH=/opt/homebrew/bin:$PATH
+export PATH=/opt/homebrew/sbin:$PATH
+
+# Python3
+export PATH=~/Library/Python/3.11/bin:$PATH
+
+# pyenv
+PATH=$(pyenv root)/shims:$PATH
+
+# mysql-client
+export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
+
+eval "$(/opt/homebrew/bin/brew shellenv)"

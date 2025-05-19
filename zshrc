@@ -37,9 +37,8 @@ DISABLE_UNTRACKED_FILES_DIRTY="true"
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
-if uname -s | grep -q Darwin
-then
-	plugins=(command-coloring autojump osx brew github gitignore git-extras git-flow python pip history terminalapp ruby gem gnu-utils rsync colorize sublime mosh textmate npm tmux)
+if uname -s | grep -q Darwin; then
+	plugins=(command-coloring autojump osx brew github gitignore git-extras git-flow python pip history terminalapp ruby gem gnu-utils rsync colorize sublime mosh npm tmux)
 else
 	# Not on mac, using ssh-agent plugin
 	plugins=(command-coloring ssh-agent git-extras git-flow history tmux)
@@ -47,33 +46,8 @@ fi
 
 source $ZSH/oh-my-zsh.sh
 
-bindkey ' ' magic-space
-bindkey '^[^[[D' backward-word
-bindkey '^[^[[C' forward-word
-bindkey '^[[5D' beginning-of-line
-bindkey '^[[5C' end-of-line
-bindkey '^[[3~' delete-char
-bindkey '^[^N' newtab
-bindkey '^?' backward-delete-char
-
-# Add the following to your zshrc to access the online help:
-autoload run-help
-HELPDIR=/usr/local/share/zsh/helpfiles
-
-# added by travis gem
-[ -f /home/qingpei/.travis/travis.sh ] && source /home/qingpei/.travis/travis.sh
-
 # completion
 autoload -U compinit
 compinit
 
 autoload colors && colors
-
-# zsh-completions
-fpath=(/usr/local/share/zsh-completions $fpath)
-
-# zsh-syntax-highlighting
-source /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
-
-# awscli completion
-# source /usr/local/share/zsh/site-functions/_aws

@@ -11,3 +11,10 @@ PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
 
 # added by travis gem
 [ -f /home/qingpei/.travis/travis.sh ] && source /home/qingpei/.travis/travis.sh
+
+source /Users/qingpei/.config/broot/launcher/bash/br
+
+[ -f ~/.fzf.bash ] && source ~/.fzf.bash
+
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:/Users/qingpei/.lmstudio/bin"
