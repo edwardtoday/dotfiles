@@ -1,0 +1,11 @@
+# Custom Dictionary Words
+bootable
+Exceria
+Flowable
+journalctl
+Kylin
+mkdir
+MQTTS
+sansi
+SPON
+xstudiopro
