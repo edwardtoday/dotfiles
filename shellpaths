@@ -50,4 +50,10 @@ PATH=$(pyenv root)/shims:$PATH
 # mysql-client
 export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
 
+# uv
+export PATH="/Users/qingpei/.local/bin:$PATH"
+
 eval "$(/opt/homebrew/bin/brew shellenv)"
+
+# JDK
+export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"

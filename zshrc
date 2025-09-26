@@ -38,7 +38,7 @@ DISABLE_UNTRACKED_FILES_DIRTY="true"
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 if uname -s | grep -q Darwin; then
-	plugins=(command-coloring autojump osx brew github gitignore git-extras git-flow python pip history terminalapp ruby gem gnu-utils rsync colorize sublime mosh npm tmux)
+	plugins=(autojump macos brew github gitignore python pip history ruby gem gnu-utils rsync colorize sublime mosh npm tmux)
 else
 	# Not on mac, using ssh-agent plugin
 	plugins=(command-coloring ssh-agent git-extras git-flow history tmux)
@@ -51,3 +51,7 @@ autoload -U compinit
 compinit
 
 autoload colors && colors
+
+bindkey ' ' magic-space
+bindkey "^A" vi-beginning-of-line
+bindkey "^E" vi-end-of-line

@@ -11,9 +11,5 @@ for file in ~/.{shellpaths,shellvars,shellaliases,shellfuncs,prompt,extra}; do
 done
 unset file
 
-bindkey ' ' magic-space
-bindkey "^A" vi-beginning-of-line
-bindkey "^E" vi-end-of-line
-
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:/Users/qingpei/.lmstudio/bin"

@@ -218,74 +218,6 @@ function getcertnames() {
     fi
 }
 
-# Add note to Notes.app (OS X 10.8)
-# Usage: `note 'title' 'body'` or `echo 'body' | note`
-# Title is optional
-function note() {
-    local title
-    local body
-    if [ -t 0 ]; then
-        title="$1"
-        body="$2"
-    else
-        title=$(cat)
-    fi
-    osascript >/dev/null <<EOF
-tell application "Notes"
-        tell account "iCloud"
-                tell folder "Notes"
-                        make new note with properties {name:"$title", body:"$title" & "<br><br>" & "$body"}
-                end tell
-        end tell
-end tell
-EOF
-}
-
-# Add reminder to Reminders.app (OS X 10.8)
-# Usage: `remind 'foo'` or `echo 'foo' | remind`
-function remind() {
-    local text
-    if [ -t 0 ]; then
-        text="$1" # argument
-    else
-        text=$(cat) # pipe
-    fi
-    osascript >/dev/null <<EOF
-tell application "Reminders"
-        tell the default list
-                make new reminder with properties {name:"$text"}
-        end tell
-end tell
-EOF
-}
-
-# Install Grunt plugins and add them as `devDependencies` to `package.json`
-# Usage: `gi contrib-watch contrib-uglify zopfli`
-function gi() {
-    local IFS=,
-    eval npm install --save-dev grunt-{"$*"}
-}
-
-# `m` with no arguments opens the current directory in TextMate, otherwise
-# opens the given location
-function m() {
-    if [ $# -eq 0 ]; then
-        mate .
-    else
-        mate "$@"
-    fi
-}
-
-# `s` with no arguments opens the current directory in Sublime Text, otherwise
-# opens the given location
-function s() {
-    if [ $# -eq 0 ]; then
-        subl .
-    else
-        subl "$@"
-    fi
-}
-
 # `v` with no arguments opens the current directory in Vim, otherwise opens the
 # given location
 function v() {
@@ -324,6 +256,85 @@ function cdf() {
                                POSIX path of currentFolder
                             end tell')
     cd "$finderPath"
+}
+
+## remove the "resumable copy" flag of a folder
+function clearResumableCopyFlag {
+  # 定义局部变量，避免污染外部环境
+  local item
+  local mod_date
+  local xattr_exit_code
+  local xattr_found_and_failed_to_remove # 标记属性存在但删除失败
+
+  # 检查是否有参数传入
+  if [ $# -eq 0 ]; then
+    echo "用法: fixFolder <文件或目录> [其他文件或目录 ...]"
+    echo "或者使用 fixFolder * 这样的通配符。"
+    return 1 # 返回错误码
+  fi
+
+  # 使用 "$@" 来遍历所有传递给函数的参数
+  for item in "$@"; do
+    # 重置标记
+    xattr_found_and_failed_to_remove=0
+
+    # 检查文件或目录是否存在
+    if [ ! -e "$item" ]; then
+      echo "跳过: 未找到 '$item'"
+      continue # 继续处理下一个参数
+    fi
+
+    echo "正在处理: $item"
+
+    # 1. 获取原始的修改日期
+    #    stat -f "%Sm" 输出的格式类似于 "May 28 10:30:00 2025"
+    #    macOS 的 SetFile -d 可以直接识别这种格式
+    mod_date=$(stat -f "%Sm" "$item")
+    if [ -z "$mod_date" ]; then
+      echo "  错误: 无法获取 '$item' 的修改日期。"
+      continue
+    fi
+    echo "  原始修改日期: $mod_date"
+
+    # 2. 删除指定的扩展属性 'com.apple.metadata:kMDItemResumableCopy'
+    #    -d: 删除属性
+    #    -r: 如果 item 是目录，则递归地从目录及其内容中删除该属性。
+    #        这符合你成功案例中 xattr -rc * 的 -r (递归) 行为。
+    #        你原始函数中的 -s (处理符号链接本身) 在此场景下通常不是必需的，
+    #        因为 resumable copy 标记通常在实际文件/目录上。
+    echo "  正在尝试删除扩展属性 'com.apple.metadata:kMDItemResumableCopy'..."
+    xattr -dr com.apple.metadata:kMDItemResumableCopy "$item"
+    xattr_exit_code=$?
+
+    # 检查 xattr 命令的退出状态码
+    if [ $xattr_exit_code -eq 0 ]; then
+      echo "  成功: 扩展属性 'com.apple.metadata:kMDItemResumableCopy' 已被删除 (或原本就不存在)。"
+    else
+      # 如果 xattr -dr 失败，进一步检查属性是否真的存在
+      # xattr -p <attr_name> <file> 如果属性存在，则退出码为0；如果不存在，则为1。
+      if xattr -p com.apple.metadata:kMDItemResumableCopy "$item" >/dev/null 2>&1; then
+        # 属性存在，但删除失败
+        echo "  警告: 从 '$item' 删除扩展属性 'com.apple.metadata:kMDItemResumableCopy' 失败 (退出码 $xattr_exit_code)。属性可能仍然存在。"
+        xattr_found_and_failed_to_remove=1
+      else
+        # 属性不存在，xattr -dr 因其他原因失败 (理论上不常见，因为文件存在性已检查)
+        # 或者，属性不存在时，xattr -d 也会返回非零退出码（通常是 ENOATTR，值为1）
+        echo "  信息: 在 '$item' 上未找到扩展属性 'com.apple.metadata:kMDItemResumableCopy' (xattr -dr 退出码 $xattr_exit_code)。"
+      fi
+    fi
+
+    # 3. 恢复原始的修改日期
+    #    SetFile -d "日期字符串" 文件路径
+    #    即使 xattr 删除失败，也尝试恢复日期，因为 xattr 命令本身可能已更改了日期。
+    echo "  正在尝试将 '$item' 的修改日期恢复为 '$mod_date'..."
+    SetFile -d "$mod_date" "$item"
+    if [ $? -eq 0 ]; then
+      echo "  成功: '$item' 的修改日期已恢复。"
+    else
+      echo "  错误: 恢复 '$item' 的修改日期失败。"
+    fi
+    echo "---" # 分隔每个文件的处理信息
+  done
 }
 
 # Usage: compresspdf [input file] [output file] [screen|ebook|printer*|prepress]
@@ -450,4 +461,46 @@ function fixFolder {
     mod_date=$(stat -f "%Sm" "$file")
     xattr -drs com.apple.metadata:kMDItemResumableCopy $file
     SetFile -d "$mod_date" "$file"
+}
+
+mkv2mp4() {
+  # 检查 ffmpeg 命令是否存在
+  if ! command -v ffmpeg &> /dev/null; then
+    echo "错误：未找到 ffmpeg 命令。"
+    echo "请先使用 Homebrew 安装：brew install ffmpeg"
+    return 1
+  fi
+
+  # 检查是否提供了文件参数
+  if [ "$#" -eq 0 ]; then
+    echo "用法: mkv2mp4 file1.mkv file2.mkv ..."
+    echo "或使用通配符: mkv2mp4 *.mkv"
+    return 1
+  fi
+
+  # 遍历所有传入的参数（文件名）
+  for f in "$@"; do
+    # 检查文件是否存在
+    if [ ! -f "$f" ]; then
+        echo "警告：文件 '$f' 不存在，已跳过。"
+        continue
+    fi
+
+    # 生成输出文件名，即将 .mkv 替换为 .mp4
+    output_file="${f%.mkv}.mp4"
+
+    echo "正在转换: '$f' -> '$output_file'"
+
+    # 执行转换命令，-loglevel error 只在发生错误时才显示 ffmpeg 的输出
+    ffmpeg -i "$f" -c:v copy -c:a copy -loglevel error "$output_file"
+
+    # 检查 ffmpeg 命令是否成功执行
+    if [ $? -eq 0 ]; then
+        echo "转换成功: '$output_file'"
+    else
+        echo "错误：转换 '$f' 失败。"
+    fi
+  done
+
+  echo "所有任务处理完毕。"
 }

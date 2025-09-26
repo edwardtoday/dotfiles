@@ -36,3 +36,4 @@ zle -N newtab
 
 # for mactex
 eval $(/usr/libexec/path_helper -s)
+source /opt/homebrew/opt/autoenv/activate.sh

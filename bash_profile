@@ -44,8 +44,5 @@ fi
 # If possible, add tab completion for many more commands
 [ -f /etc/bash_completion ] && source /etc/bash_completion
 
-
-source /Users/qingpei/.config/broot/launcher/bash/br
-
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:/Users/qingpei/.lmstudio/bin"
