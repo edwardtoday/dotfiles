@@ -1,22 +1,45 @@
-# Install native apps
-brew install phinze/cask/brew-cask
+#!/usr/bin/env bash
 
-function installcask() {
-        brew cask install "${@}" 2> /dev/null
-}
+set -euo pipefail
 
-# installcask dropbox
-# installcask google-chrome
-installcask imagealpha
-installcask imageoptim
-# installcask iterm2
-# installcask macvim
-# installcask miro-video-converter
-# installcask osxfuse
-# installcask sublime-text
-installcask the-unarchiver
-# installcask tor-browser
-# installcask transmission
-# installcask ukelele
-# installcask virtualbox
-installcask fakethunder
+if ! command -v brew >/dev/null 2>&1; then
+  echo "[cask] Homebrew not found; skipping" >&2
+  exit 0
+fi
+
+apps=(
+  imagealpha
+  imageoptim
+  the-unarchiver
+  fakethunder
+)
+
+for app in "${apps[@]}"; do
+  case ${app} in
+    imagealpha) app_path="/Applications/ImageAlpha.app" ;;
+    imageoptim) app_path="/Applications/ImageOptim.app" ;;
+    the-unarchiver) app_path="/Applications/The Unarchiver.app" ;;
+    fakethunder) app_path="/Applications/FakeThunder.app" ;;
+    *) app_path="" ;;
+  esac
+
+  if [[ -n ${app_path} && -d ${app_path} ]]; then
+    echo "[cask] ${app} already available at ${app_path}"
+    continue
+  fi
+
+  if brew list --cask "${app}" >/dev/null 2>&1; then
+    echo "[cask] ${app} already installed"
+    continue
+  fi
+
+  if ! brew info --cask "${app}" >/dev/null 2>&1; then
+    echo "[cask] ${app} not in Homebrew; skipping" >&2
+    continue
+  fi
+
+  echo "[cask] Installing ${app}"
+  if ! brew install --cask "${app}"; then
+    echo "[cask] Skipping ${app}: install failed" >&2
+  fi
+done

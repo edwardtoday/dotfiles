@@ -1,22 +1,51 @@
 #!/usr/bin/env ruby
 
-system ("git pull")
+require 'fileutils'
+
+system("git pull")
 
 # Inspired by http://errtheblog.com/posts/89-huba-huba
-
+#
 # This is idempotent, meaning you can run it over and over again without fear of
 # breaking anything. Use it as an installer or to upgrade after merging from an
 # upstream fork.
 
 home = File.expand_path('~')
+repo_root = File.expand_path(File.dirname(__FILE__))
 
 Dir['*'].each do |file|
-  next if file =~ /install/ || file =~ /README/
+  next if file =~ /install/ || file =~ /README/ || file == 'config'
+
+  source = File.expand_path(file, repo_root)
   target = File.join(home, ".#{file}")
-  `ln -fns #{File.expand_path file} #{target}`
+  FileUtils.ln_sf(source, target)
 end
 
-system ("source ~/.init/osx.sh")
-system ("source ~/.init/ubuntu.sh")
-system ("source ~/.init/fedora.sh")
+config_src = File.join(repo_root, 'config')
+if File.directory?(config_src)
+  config_target_dir = File.join(home, '.config')
+  FileUtils.mkdir_p(config_target_dir)
 
+  obsolete = File.join(config_target_dir, 'config')
+  if File.symlink?(obsolete) && File.readlink(obsolete) == config_src
+    FileUtils.rm(obsolete)
+  end
+
+  Dir.children(config_src).each do |entry|
+    next if entry.start_with?('.')
+
+    source = File.join(config_src, entry)
+    target = File.join(config_target_dir, entry)
+
+    if File.exist?(target) && !File.symlink?(target)
+      puts "[install] skip #{target}: exists and is not a symlink"
+      next
+    end
+
+    FileUtils.ln_sf(source, target)
+  end
+end
+
+system("source ~/.init/osx.sh")
+system("source ~/.init/ubuntu.sh")
+system("source ~/.init/fedora.sh")
