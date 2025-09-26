@@ -1,5 +1,11 @@
 # edwardtoday’s dotfiles
 
+## Agent Configuration
+
+- `AGENTS.md` 记录了个人 Coding Agent 的核心协议，安装脚本会将它软链接为 `~/.AGENTS.md`（以及 `.codex/AGENTS.md` 等依赖文件）。
+- 更新该文件时默认遵循文档中的自动阶段转换规则；提交 Merge Request 时请先以 `Draft:` 前缀创建，待 CI 管道全部通过、日志核对完毕且确认无冲突后再去除前缀。
+- 技术指南拆分存放于 `docs/tech-guides/`，如需查阅请直接访问当前分支 (`osx`) 下的 raw 链接，无需默认纳入上下文。
+
 ## Installation
 
 ### Using Git and the bootstrap script
