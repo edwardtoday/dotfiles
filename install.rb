@@ -2,8 +2,6 @@
 
 require 'fileutils'
 
-system("git pull")
-
 # Inspired by http://errtheblog.com/posts/89-huba-huba
 #
 # This is idempotent, meaning you can run it over and over again without fear of
@@ -12,6 +10,8 @@ system("git pull")
 
 home = File.expand_path('~')
 repo_root = File.expand_path(File.dirname(__FILE__))
+
+run_bootstrap = ARGV.delete('--bootstrap')
 
 Dir['*'].each do |file|
   next if file =~ /install/ || file =~ /README/ || file == 'config'
@@ -46,6 +46,15 @@ if File.directory?(config_src)
   end
 end
 
-system("source ~/.init/osx.sh")
-system("source ~/.init/ubuntu.sh")
-system("source ~/.init/fedora.sh")
+init_dir = File.join(home, '.init')
+if run_bootstrap && File.directory?(init_dir)
+  %w[osx ubuntu fedora].each do |name|
+    script = File.join(init_dir, "#{name}.sh")
+    next unless File.executable?(script)
+
+    puts "[install] running #{script}"
+    system(script)
+  end
+elsif File.directory?(init_dir)
+  puts "[install] skipping OS bootstrap scripts; run with --bootstrap or execute ~/.init/*.sh manually"
+end

@@ -1,0 +1,65 @@
+model_provider = "codex"
+model = "gpt-5.1"
+notify = ["python3", "/Users/qingpei/.codex/notify.py"]
+disable_response_storage = true
+model_reasoning_effort = "high"
+model_reasoning_summary = "detailed"
+show_raw_agent_reasoning = true
+
+[model_providers.codex]
+name = "codex"
+# base_url = "https://code.ppchat.vip/v1"
+base_url = "https://code.pumpkinai.vip/v1"
+wire_api = "responses"
+requires_openai_auth = true
+env_key = "OPENAI_API_KEY"
+
+[model_providers.openrouter]
+name = "openrouter"
+base_url = "https://openrouter.ai/api/v1"
+wire_api = "chat"
+env_key = "OPENROUTER_API_KEY"
+
+[model_providers.siliconflow]
+name = "siliconflow"
+base_url = "https://api.siliconflow.cn/v1"
+wire_api = "chat"
+env_key = "SILICONFLOW_API_KEY"
+
+[model_providers.poe]
+name = "poe"
+base_url = "https://api.poe.com/v1"
+wire_api = "chat"
+env_key = "POE_API_KEY"
+
+[profiles.codex]
+model = "gpt-5-codex"
+model_provider = "codex"
+
+[profiles.openrouter-gpt5]
+model = "openai/gpt-5"
+model_provider = "openrouter"
+
+[profiles.openrouter-glm46]
+model = "z-ai/glm-4.6"
+model_provider = "openrouter"
+approval_policy = "never"
+network_access = true
+
+[profiles.siliconflow-glm46]
+model = "zai-org/GLM-4.6"
+model_provider = "siliconflow"
+
+[profiles.poe-gpt5]
+model = "GPT-5"
+model_provider = "poe"
+
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = ["chrome-devtools-mcp@latest"]
+
+[features]
+web_search_requests = true
+
+[notice]
+hide_gpt5_1_migration_prompt = true

@@ -1,3 +1,6 @@
+# for mactex
+eval $(/usr/libexec/path_helper -s)
+
 ##############################################################################
 # Import the shell-agnostic (Bash or Zsh) environment config
 ##############################################################################
@@ -34,6 +37,25 @@ setopt complete_aliases
 
 zle -N newtab
 
-# for mactex
-eval $(/usr/libexec/path_helper -s)
 source /opt/homebrew/opt/autoenv/activate.sh
+# Prefer Homebrew Ruby for login shells as well
+export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
+export GEM_HOME="${GEM_HOME:-/opt/homebrew/lib/ruby/gems/$(/opt/homebrew/opt/ruby/bin/ruby -e 'print RbConfig::CONFIG["ruby_version"]') }"
+export PATH="$GEM_HOME/bin:$PATH"
+export PATH="$HOME/.cargo/bin:$PATH"
+export PATH="$HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH"
+
+# PATH de-dup and prune for login shells
+if [ -n "$PATH" ]; then
+  typeset -Ua _p;
+  _p=(${(s/:/)PATH});
+  local deduped=();
+  local seen="";
+  for d in "${_p[@]}"; do
+    [[ -d "$d" ]] || continue
+    case ":$seen:" in *:"$d":*) continue;; esac
+    seen="$seen:$d"; deduped+="$d"
+  done
+  export PATH="${(j/:/)deduped}"
+  unset _p deduped seen
+fi

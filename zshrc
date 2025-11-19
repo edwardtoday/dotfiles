@@ -46,12 +46,24 @@ fi
 
 source $ZSH/oh-my-zsh.sh
 
+# The following lines have been added by Docker Desktop to enable Docker CLI completions.
+fpath=(/Users/qingpei/.docker/completions $fpath)
 # completion
 autoload -U compinit
 compinit
+# End of Docker CLI completions
 
 autoload colors && colors
 
 bindkey ' ' magic-space
 bindkey "^A" vi-beginning-of-line
 bindkey "^E" vi-end-of-line
+
+# Prefer Homebrew Ruby over system Ruby
+export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
+# Add user-installed gem executables to PATH for Homebrew Ruby
+export GEM_HOME="${GEM_HOME:-/opt/homebrew/lib/ruby/gems/$(/opt/homebrew/opt/ruby/bin/ruby -e 'print RbConfig::CONFIG["ruby_version"]') }"
+export PATH="$GEM_HOME/bin:$PATH"
+# Use user-level prefix for global npm installs
+export NPM_CONFIG_PREFIX="$HOME/.npm-global"
+export PATH="$HOME/.npm-global/bin:$PATH"

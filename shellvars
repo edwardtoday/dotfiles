@@ -40,9 +40,7 @@ export HOMEBREW_BOOTSNAP=1
 export HOMEBREW_DISPLAY_INSTALL_TIMES=1
 export HOMEBREW_NO_AUTO_UPDATE=1
 
-export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=http://127.0.0.1:7890
-
-export JAVA_HOME=$(/usr/libexec/java_home -v 1.8.0_311)
+# export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=http://127.0.0.1:7890
 
 export SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock
 

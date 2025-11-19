@@ -5,7 +5,6 @@
 export MANPATH="/usr/local/man:/usr/local/mysql/man:/usr/local/git/man:$MANPATH"
 
 # edwardtoday's Scripts
-export PATH=.:$PATH
 export PATH=~/.bin:$PATH
 export PATH=~/.bin/tsc_tools_for_mac:$PATH
 
@@ -44,16 +43,14 @@ export PATH=/opt/homebrew/sbin:$PATH
 # Python3
 export PATH=~/Library/Python/3.11/bin:$PATH
 
-# pyenv
-PATH=$(pyenv root)/shims:$PATH
-
 # mysql-client
 export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
 
 # uv
 export PATH="/Users/qingpei/.local/bin:$PATH"
 
-eval "$(/opt/homebrew/bin/brew shellenv)"
+# Homebrew OpenJDK as default
+export JAVA_HOME="/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home"
+export PATH="$JAVA_HOME/bin:$PATH"
 
-# JDK
-export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
+eval "$(/opt/homebrew/bin/brew shellenv)"
