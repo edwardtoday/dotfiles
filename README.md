@@ -2,9 +2,9 @@
 
 ## Agent Configuration
 
-- `AGENTS.md` 记录了个人 Coding Agent 的核心协议，安装脚本会将它软链接为 `~/.AGENTS.md`（以及 `.codex/AGENTS.md` 等依赖文件）。
-- 更新该文件时默认遵循文档中的自动阶段转换规则；提交 Merge Request 时请先以 `Draft:` 前缀创建，待 CI 管道全部通过、日志核对完毕且确认无冲突后再去除前缀。
-- 技术指南拆分存放于 `docs/tech-guides/`，如需查阅请直接访问当前分支 (`osx`) 下的 raw 链接，无需默认纳入上下文。
+- `AGENTS.md` 现在只保留全局基线规则，安装脚本会将它软链接为 `~/.AGENTS.md`；低频、专题化规则拆分存放在 `AGENTS.d/`，`~/.codex/AGENTS.md` 等入口文件会统一指向同一套规则。
+- 维护规则时，优先把高频、稳定、跨项目的内容放进 `AGENTS.md`，把长篇、专题化或项目特例放进 `AGENTS.d/` 或项目级 `AGENTS.md`；GitLab / MR 约定详见 `AGENTS.d/gitlab.md`。
+- 技术指南存放于 `docs/tech-guides/`，默认优先读取本地文件；仅在需要跨仓库引用或外部访问时，再使用对应的 Raw 链接。
 
 ## Installation
 
