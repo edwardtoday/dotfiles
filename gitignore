@@ -157,3 +157,6 @@ pip-log.txt
 /.hg/*
 */.hg/*
 .hgignore
+
+# Local AI tool settings
+**/.claude/settings.local.json

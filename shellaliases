@@ -1,5 +1,4 @@
 alias pocr='pngpaste - | tesseract -l eng+chi_sim stdin stdout'
-alias df='dfc -dTmw -p -/dev/loop,tmp,dev,run,one'
 alias dd='dd status=progress'
 alias lines='tokei'
 alias search="rg"
@@ -239,13 +238,6 @@ alias youdl='yt-dlp --proxy http://127.0.0.1:7890'
 alias lg='lazygit'
 
 alias weather='curl wttr.in/shanghai'
-
-# immich users
-
-alias immichqp='immich -u "$IMMICH_URL" -k "$IMMICH_QP_KEY"'
-alias immichzxf='immich -u "$IMMICH_URL" -k "$IMMICH_ZXF_KEY"'
-alias immichqhy='immich -u "$IMMICH_URL" -k "$IMMICH_QHY_KEY"'
-alias immichljh='immich -u "$IMMICH_URL" -k "$IMMICH_LJH_KEY"'
 
 # yt-dlp
 # Download the best mp4 video available, or the best video if no mp4 available

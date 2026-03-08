@@ -13,12 +13,23 @@ repo_root = File.expand_path(File.dirname(__FILE__))
 
 run_bootstrap = ARGV.delete('--bootstrap')
 
+def ensure_symlink(source, target)
+  if File.symlink?(target)
+    FileUtils.rm_f(target)
+  elsif File.directory?(target)
+    puts "[install] skip #{target}: exists and is not a symlink"
+    return
+  end
+
+  FileUtils.ln_sf(source, target)
+end
+
 Dir['*'].each do |file|
   next if file =~ /install/ || file =~ /README/ || file == 'config'
 
   source = File.expand_path(file, repo_root)
   target = File.join(home, ".#{file}")
-  FileUtils.ln_sf(source, target)
+  ensure_symlink(source, target)
 end
 
 config_src = File.join(repo_root, 'config')
@@ -37,12 +48,7 @@ if File.directory?(config_src)
     source = File.join(config_src, entry)
     target = File.join(config_target_dir, entry)
 
-    if File.exist?(target) && !File.symlink?(target)
-      puts "[install] skip #{target}: exists and is not a symlink"
-      next
-    end
-
-    FileUtils.ln_sf(source, target)
+    ensure_symlink(source, target)
   end
 end
 

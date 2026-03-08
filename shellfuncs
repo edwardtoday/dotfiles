@@ -504,3 +504,145 @@ mkv2mp4() {
 
   echo "所有任务处理完毕。"
 }
+
+# 在 ~/.codex/auth.txt 中按 name 选择 token，并写入 ~/.codex/auth.json
+# auth.txt 支持格式:
+#   name key
+#   name=key
+#   name:key
+
+immich_user() {
+  local key="$1"
+  shift
+
+  if [ -z "${IMMICH_URL:-}" ]; then
+    echo "错误: 请在 ~/.extra 中设置 IMMICH_URL" >&2
+    return 1
+  fi
+
+  if [ -z "$key" ]; then
+    echo "错误: 请在 ~/.extra 中设置对应的 IMMICH_*_KEY" >&2
+    return 1
+  fi
+
+  immich -u "$IMMICH_URL" -k "$key" "$@"
+}
+
+immichqp() {
+  immich_user "${IMMICH_QP_KEY:-}" "$@"
+}
+
+immichzxf() {
+  immich_user "${IMMICH_ZXF_KEY:-}" "$@"
+}
+
+immichqhy() {
+  immich_user "${IMMICH_QHY_KEY:-}" "$@"
+}
+
+immichljh() {
+  immich_user "${IMMICH_LJH_KEY:-}" "$@"
+}
+
+codex-use() {
+  local name="$1"
+  local auth_txt="${CODEX_AUTH_TXT:-$HOME/.codex/auth.txt}"
+  local auth_json="${CODEX_AUTH_JSON:-$HOME/.codex/auth.json}"
+  local key=""
+  local names=""
+
+  if [ ! -f "$auth_txt" ]; then
+    echo "错误: 未找到 $auth_txt" >&2
+    return 1
+  fi
+
+  names=$(
+    python3 - "$auth_txt" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+pattern = re.compile(r'^([A-Za-z0-9._-]+)\s*(?:=|:|\s)\s*(\S+)\s*$')
+
+names = []
+with open(path, encoding='utf-8') as f:
+    for raw in f:
+        line = raw.strip()
+        if not line or line.startswith('#'):
+            continue
+        m = pattern.match(line)
+        if m:
+            names.append(m.group(1))
+
+print(' '.join(names), end='')
+PY
+  )
+
+  if [ -z "$name" ]; then
+    echo "用法: codex-use <name>" >&2
+    [ -n "$names" ] && echo "可用 name: $names" >&2
+    return 1
+  fi
+
+  key=$(
+    python3 - "$auth_txt" "$name" <<'PY'
+import re
+import sys
+
+path, target = sys.argv[1], sys.argv[2]
+pattern = re.compile(r'^([A-Za-z0-9._-]+)\s*(?:=|:|\s)\s*(\S+)\s*$')
+
+with open(path, encoding='utf-8') as f:
+    for raw in f:
+        line = raw.strip()
+        if not line or line.startswith('#'):
+            continue
+        m = pattern.match(line)
+        if not m:
+            continue
+        name, key = m.group(1), m.group(2)
+        if name == target:
+            print(key, end='')
+            raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+  ) || {
+    echo "错误: 未找到 name '$name'" >&2
+    [ -n "$names" ] && echo "可用 name: $names" >&2
+    return 1
+  }
+
+  if ! CODEX_SELECTED_KEY="$key" python3 - "$auth_json" <<'PY'; then
+import json
+import os
+import sys
+import tempfile
+
+dst = sys.argv[1]
+key = os.environ.get("CODEX_SELECTED_KEY", "").strip()
+if not key:
+    raise SystemExit("empty key")
+
+directory = os.path.dirname(dst) or '.'
+fd, tmp = tempfile.mkstemp(prefix='.auth.', suffix='.json', dir=directory)
+try:
+    with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        json.dump({"OPENAI_API_KEY": key}, f, ensure_ascii=False, indent=2)
+        f.write('\n')
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, dst)
+except Exception:
+    try:
+        os.unlink(tmp)
+    except FileNotFoundError:
+        pass
+    raise
+PY
+    echo "错误: 写入 $auth_json 失败" >&2
+    return 1
+  fi
+
+  chmod 600 "$auth_json" 2>/dev/null
+  echo "已切换 Codex key: $name"
+}
