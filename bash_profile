@@ -7,6 +7,13 @@
 # Import the Z or Bash shell agnostic environment config
 source ~/.profile
 
+[ -r ~/.extra_login ] && [ -f ~/.extra_login ] && source ~/.extra_login
+
+for file in ~/.{shellaliases,shellfuncs,prompt}; do
+        [ -r "$file" ] && [ -f "$file" ] && source "$file"
+done
+unset file
+
 # Case-insensitive globbing (used in pathname expansion)
 shopt -s nocaseglob
 

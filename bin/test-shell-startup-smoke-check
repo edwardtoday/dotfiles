@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+target_script="$script_dir/shell-startup-smoke-check"
+base_path="${PATH:-/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin}"
+
+make_success_home() {
+  local home_dir="$1"
+
+  cat >"$home_dir/.profile" <<'EOF'
+export SR_BASE_URL="https://112.2.46.78:18443"
+EOF
+
+  cat >"$home_dir/.zprofile" <<'EOF'
+source ~/.profile
+EOF
+
+  cat >"$home_dir/.zshrc" <<'EOF'
+source ~/.profile
+alias co='echo codex'
+set3161() { :; }
+awsus() { :; }
+EOF
+
+  cat >"$home_dir/.bash_profile" <<'EOF'
+source ~/.profile
+alias co='echo codex'
+set3161() { :; }
+awsus() { :; }
+EOF
+}
+
+make_failure_home() {
+  local home_dir="$1"
+
+  make_success_home "$home_dir"
+
+  cat >"$home_dir/.zshrc" <<'EOF'
+source ~/.profile
+alias co='echo codex'
+set3161() { :; }
+EOF
+}
+
+run_target() {
+  local home_dir="$1"
+
+  env -i \
+    HOME="$home_dir" \
+    USER="${USER:-test}" \
+    LOGNAME="${LOGNAME:-test}" \
+    TERM="xterm-256color" \
+    PATH="$base_path" \
+    "$target_script"
+}
+
+cleanup() {
+  rm -rf "${SUCCESS_HOME:-}" "${FAILURE_HOME:-}"
+}
+
+main() {
+  local failure_output
+
+  SUCCESS_HOME="$(mktemp -d)"
+  FAILURE_HOME="$(mktemp -d)"
+  trap cleanup EXIT
+
+  make_success_home "$SUCCESS_HOME"
+  make_failure_home "$FAILURE_HOME"
+
+  run_target "$SUCCESS_HOME" >/dev/null
+
+  if failure_output="$(run_target "$FAILURE_HOME" 2>&1)"; then
+    echo "expected failure fixture to fail" >&2
+    exit 1
+  fi
+
+  printf '%s\n' "$failure_output" | grep -q 'awsus'
+  echo 'shell-startup-smoke-check tests: ok'
+}
+
+main "$@"

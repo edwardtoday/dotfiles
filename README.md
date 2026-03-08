@@ -24,9 +24,13 @@ To update, `cd` into your local `dotfiles` repository and then:
 
 ### Add custom commands without creating a new fork
 
-If `~/.extra` exists, it will be sourced along with the other files. You can use this to add a few custom commands without the need to fork this entire repository, or to add commands you don’t want to commit to a public repository.
+If `~/.extra_env` exists, it is sourced from the shell-agnostic profile and zsh interactive startup. Use it for private environment variables and portable helper functions you don’t want to commit to the public repository.
 
-My `~/.extra` looks something like this:
+If `~/.extra_login` exists, it is sourced only by login shells. Use it for login-time commands such as `git config`, `launchctl`, or shell integrations that should not run on every profile load.
+
+`~/.extra` is kept as a compatibility shim in my private setup, but new customizations should go into `~/.extra_env` or `~/.extra_login` instead.
+
+My login-only private config looks something like this:
 
 ```bash
 # Git credentials
@@ -35,7 +39,13 @@ git config --global user.name "Pei Qing 卿培"
 git config --global user.email "edwardtoday@gmail.com"
 ```
 
-You could also use `~/.extra` to override settings, functions and aliases from my dotfiles repository. It’s probably better to [fork this repository](https://github.com/edwardtoday/dotfiles/fork) instead, though.
+You could also use `~/.extra_env` to override settings or add helper functions on top of this repository. It’s probably better to [fork this repository](https://github.com/edwardtoday/dotfiles/fork) instead, though.
+
+### Validate shell startup
+
+Run `~/.bin/shell-startup-smoke-check` (or `./bin/shell-startup-smoke-check` inside the repo) to verify `zsh -ilc`, `zsh -ic`, and `bash -lc` all expose `SR_BASE_URL`, `set3161`, `awsus`, and `co`.
+
+Use `./bin/test-shell-startup-smoke-check` to run the fixture-based regression check for the smoke command itself.
 
 ### Sensible OS X defaults
 

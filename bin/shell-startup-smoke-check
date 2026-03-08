@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+EXPECTED_ENV_NAME="SR_BASE_URL"
+EXPECTED_ENV_VALUE="https://112.2.46.78:18443"
+EXPECTED_FUNCTIONS=(set3161 awsus)
+EXPECTED_ALIASES=(co)
+
+BASE_PATH="${PATH:-/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin}"
+TERM_VALUE="${TERM:-xterm-256color}"
+CHECK_SCRIPT="$(mktemp)"
+
+cleanup() {
+  rm -f "$CHECK_SCRIPT"
+}
+
+build_check_script() {
+  printf '[ "${%s-}" = "%s" ] || { echo "missing env: %s=%s" >&2; exit 1; }\n' \
+    "$EXPECTED_ENV_NAME" \
+    "$EXPECTED_ENV_VALUE" \
+    "$EXPECTED_ENV_NAME" \
+    "$EXPECTED_ENV_VALUE" > "$CHECK_SCRIPT"
+
+  for function_name in "${EXPECTED_FUNCTIONS[@]}"; do
+    printf 'typeset -f %s >/dev/null 2>&1 || { echo "missing function: %s" >&2; exit 1; }\n' \
+      "$function_name" \
+      "$function_name" >> "$CHECK_SCRIPT"
+  done
+
+  for alias_name in "${EXPECTED_ALIASES[@]}"; do
+    printf 'alias %s >/dev/null 2>&1 || { echo "missing alias: %s" >&2; exit 1; }\n' \
+      "$alias_name" \
+      "$alias_name" >> "$CHECK_SCRIPT"
+  done
+}
+
+run_check() {
+  local label="$1"
+  local shell_name="$2"
+  local shell_flag="$3"
+  local shell_path output
+
+  shell_path="$(command -v "$shell_name" 2>/dev/null || true)"
+  if [ -z "$shell_path" ]; then
+    printf 'FAIL %s\n' "$label"
+    printf '  shell not found: %s\n' "$shell_name"
+    return 1
+  fi
+
+  if output="$(env -i \
+    HOME="$HOME" \
+    USER="${USER:-${LOGNAME:-unknown}}" \
+    LOGNAME="${LOGNAME:-${USER:-unknown}}" \
+    SHELL="$shell_path" \
+    TERM="$TERM_VALUE" \
+    PATH="$BASE_PATH" \
+    DISABLE_AUTO_UPDATE=true \
+    ZSH_DISABLE_COMPFIX=true \
+    "$shell_path" "$shell_flag" ". \"$CHECK_SCRIPT\"" 2>&1)"; then
+    printf 'PASS %s\n' "$label"
+    return 0
+  fi
+
+  printf 'FAIL %s\n' "$label"
+  if [ -n "$output" ]; then
+    printf '%s\n' "$output" | sed 's/^/  /'
+  fi
+  return 1
+}
+
+main() {
+  local failed=0
+
+  trap cleanup EXIT
+  build_check_script
+
+  run_check 'zsh -ilc' zsh -ilc || failed=1
+  run_check 'zsh -ic' zsh -ic || failed=1
+  run_check 'bash -lc' bash -lc || failed=1
+
+  if [ "$failed" -eq 0 ]; then
+    echo 'shell startup smoke check: ok'
+  else
+    echo 'shell startup smoke check: failed' >&2
+  fi
+
+  exit "$failed"
+}
+
+main "$@"

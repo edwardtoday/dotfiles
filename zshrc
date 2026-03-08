@@ -1,4 +1,9 @@
-source ~/.zprofile
+[ -r ~/.extra_env ] && [ -f ~/.extra_env ] && source ~/.extra_env
+
+for file in ~/.{shellaliases,shellfuncs,prompt}; do
+  [ -r "$file" ] && [ -f "$file" ] && source "$file"
+done
+unset file
 
 # Path to your oh-my-zsh configuration.
 ZSH=$HOME/.oh-my-zsh
