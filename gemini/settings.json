@@ -16,6 +16,18 @@
     }
   },
   "ui": {
-    "theme": "Default Light"
+    "theme": "Atom One",
+    "showMemoryUsage": true
+  },
+  "general": {
+    "previewFeatures": true,
+    "sessionRetention": {
+      "enabled": true,
+      "maxAge": "30d",
+      "warningAcknowledged": true
+    }
+  },
+  "context": {
+    "discoveryMaxDirs": 2000
   }
 }

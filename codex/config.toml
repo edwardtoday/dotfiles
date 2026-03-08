@@ -1,65 +1,72 @@
 model_provider = "codex"
-model = "gpt-5.1"
+# model = "gpt-5.2"
+# model = "gpt-5.3-codex"
+# model = "gpt-5.3-codex-spark|[pro]"
+model = "gpt-5.4"
 notify = ["python3", "/Users/qingpei/.codex/notify.py"]
 disable_response_storage = true
-model_reasoning_effort = "high"
+model_reasoning_effort = "xhigh"
 model_reasoning_summary = "detailed"
+# model_context_window=600000
 show_raw_agent_reasoning = true
+web_search = "live"
+personality = "pragmatic"
 
 [model_providers.codex]
 name = "codex"
-# base_url = "https://code.ppchat.vip/v1"
-base_url = "https://code.pumpkinai.vip/v1"
+base_url = "https://code.ppchat.vip/v1"
+# base_url = "https://code.pumpkinai.vip/v1"
 wire_api = "responses"
 requires_openai_auth = true
-env_key = "OPENAI_API_KEY"
-
-[model_providers.openrouter]
-name = "openrouter"
-base_url = "https://openrouter.ai/api/v1"
-wire_api = "chat"
-env_key = "OPENROUTER_API_KEY"
-
-[model_providers.siliconflow]
-name = "siliconflow"
-base_url = "https://api.siliconflow.cn/v1"
-wire_api = "chat"
-env_key = "SILICONFLOW_API_KEY"
-
-[model_providers.poe]
-name = "poe"
-base_url = "https://api.poe.com/v1"
-wire_api = "chat"
-env_key = "POE_API_KEY"
-
-[profiles.codex]
-model = "gpt-5-codex"
-model_provider = "codex"
-
-[profiles.openrouter-gpt5]
-model = "openai/gpt-5"
-model_provider = "openrouter"
-
-[profiles.openrouter-glm46]
-model = "z-ai/glm-4.6"
-model_provider = "openrouter"
-approval_policy = "never"
-network_access = true
-
-[profiles.siliconflow-glm46]
-model = "zai-org/GLM-4.6"
-model_provider = "siliconflow"
-
-[profiles.poe-gpt5]
-model = "GPT-5"
-model_provider = "poe"
 
 [mcp_servers.chrome-devtools]
-command = "npx"
-args = ["chrome-devtools-mcp@latest"]
+command = "/Users/qingpei/.npm-global/bin/chrome-devtools-mcp"
+args = []
+
+[mcp_servers.playwright]
+# Avoid `npx` startup overhead/hangs during MCP handshake.
+command = "/Users/qingpei/.npm-global/bin/playwright-mcp"
+args = []
+startup_timeout_sec = 30
+
+[mcp_servers.figma]
+url = "https://mcp.figma.com/mcp"
+
+[mcp_servers.gitlab]
+command = "/Users/qingpei/.npm-global/bin/gitlab-mcp"
+args = []
+startup_timeout_sec = 30
 
 [features]
-web_search_requests = true
+shell_snapshot = true           # Speed up repeated commands
+unified_exec = true             # Use the unified PTY-backed exec tool
+skills = true
+js_repl = true
+multi_agent = true
+prevent_idle_sleep = true
 
 [notice]
 hide_gpt5_1_migration_prompt = true
+hide_full_access_warning = true
+
+[notice.model_migrations]
+"gpt-5.2" = "gpt-5.3-codex"
+
+[profiles.skill-install]
+# 1) 让 Codex 可以在工作区里写文件 + 运行安装命令
+sandbox_mode = "workspace-write"
+# 2) 关键：不要用 untrusted；用 on-request 让它每次要跑命令时问你
+approval_policy = "on-request"
+# 3) 关键：允许 workspace-write 沙箱出网（不然 GitHub 拉不下来）
+
+[sandbox_workspace_write]
+network_access = true
+
+[projects."/Users/qingpei/git/dotfiles"]
+trust_level = "trusted"
+
+[projects."/Users/qingpei"]
+trust_level = "trusted"
+
+[tui]
+status_line = ["model-with-reasoning", "context-remaining", "current-dir", "git-branch", "context-window-size"]
