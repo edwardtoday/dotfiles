@@ -1,0 +1,428 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+from __future__ import annotations
+
+import argparse
+import base64
+import datetime as _dt
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
+from typing import Iterable, Optional
+
+
+DEFAULT_MODEL = "qwen3-vl:8b"
+ALT_MODEL = "qwen3-vl-8b"
+
+DEFAULT_PROMPT = """你的任务是像一个会议记录员一样，提取图片中的关键信息。
+
+- **核心内容:** 用一两句话描述这张图片的核心内容。
+- **信息提取:**
+  - 将图片中的所有文字信息完整地提取出来。
+  - **如果信息是以表格形式呈现的，请严格使用Markdown表格格式进行输出。**
+  - 对于其他非表格的文字，请使用要点列表。
+- **关键视觉元素:** 如果图片中没有文字或文字很少，请描述图片中的关键视觉元素。
+
+请以清晰的Markdown格式返回你的分析。
+"""
+
+
+def _now_str() -> str:
+    return _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _normalize_ollama_host(host: Optional[str]) -> str:
+    if host is None or not host.strip():
+        host = os.environ.get("OLLAMA_HOST") or "http://localhost:11434"
+    host = host.strip().rstrip("/")
+    if "://" not in host:
+        host = "http://" + host
+    return host
+
+
+def _is_image_file(path: str) -> bool:
+    ext = os.path.splitext(path)[1].lower()
+    return ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+
+
+def _iter_images_in_dir(directory: str, recursive: bool) -> Iterable[str]:
+    if recursive:
+        for root, _, files in os.walk(directory):
+            for filename in files:
+                candidate = os.path.join(root, filename)
+                if _is_image_file(candidate):
+                    yield candidate
+    else:
+        for filename in os.listdir(directory):
+            candidate = os.path.join(directory, filename)
+            if os.path.isfile(candidate) and _is_image_file(candidate):
+                yield candidate
+
+
+def _read_processed_image_names(output_path: str) -> set[str]:
+    processed: set[str] = set()
+    if not os.path.exists(output_path):
+        return processed
+    with open(output_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("### 图片分析结果:"):
+                parts = line.split("`")
+                if len(parts) >= 3:
+                    processed.add(parts[1])
+    return processed
+
+
+def _init_output_file(output_path: str, target_dir: str) -> None:
+    if os.path.exists(output_path):
+        return
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("# 图片内容分析报告\n\n")
+        f.write(f"## 目录: {target_dir}\n")
+        f.write(f"## 生成日期: {_now_str()}\n\n")
+        f.write("---\n\n")
+
+
+@dataclass(frozen=True)
+class ChatStats:
+    prompt_eval_count: Optional[int] = None
+    prompt_eval_duration_ns: Optional[int] = None
+    eval_count: Optional[int] = None
+    eval_duration_ns: Optional[int] = None
+
+
+class OllamaError(RuntimeError):
+    pass
+
+
+def _post_json(url: str, payload: dict, timeout_s: int) -> urllib.response.addinfourl:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        url=url,
+        method="POST",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    return urllib.request.urlopen(req, timeout=timeout_s)
+
+
+def _ollama_chat(
+    host: str,
+    model: str,
+    prompt: str,
+    image_path: str,
+    stream: bool,
+    timeout_s: int,
+    options: Optional[dict] = None,
+    print_stream: bool = True,
+) -> tuple[str, ChatStats]:
+    with open(image_path, "rb") as f:
+        image_b64 = base64.b64encode(f.read()).decode("ascii")
+
+    # 核心实现：直接调用 Ollama HTTP API（不依赖 venv/第三方包），将图片转 base64 发送给多模态模型。
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+                "images": [image_b64],
+            }
+        ],
+        "stream": stream,
+    }
+    if options:
+        payload["options"] = options
+
+    url = f"{host}/api/chat"
+    try:
+        resp = _post_json(url, payload, timeout_s=timeout_s)
+    except urllib.error.HTTPError as e:
+        try:
+            raw = e.read().decode("utf-8", errors="replace")
+            data = json.loads(raw)
+            msg = data.get("error") or raw
+        except Exception:
+            msg = f"HTTP {e.code}"
+        raise OllamaError(msg) from e
+    except urllib.error.URLError as e:
+        raise OllamaError(
+            f"无法连接到 Ollama：{e}. 请确认已启动（例如 `ollama serve`）且 host 可访问：{host}"
+        ) from e
+
+    full_text = ""
+    stats = ChatStats()
+
+    if not stream:
+        raw = resp.read().decode("utf-8", errors="replace")
+        data = json.loads(raw)
+        full_text = (data.get("message") or {}).get("content") or ""
+        stats = ChatStats(
+            prompt_eval_count=data.get("prompt_eval_count"),
+            prompt_eval_duration_ns=data.get("prompt_eval_duration"),
+            eval_count=data.get("eval_count"),
+            eval_duration_ns=data.get("eval_duration"),
+        )
+        return full_text, stats
+
+    # 核心实现：Ollama 的流式输出是 JSONL；逐行解析并拼接 message.content，同时把内容实时打印出来。
+    for raw_line in resp:
+        if not raw_line:
+            continue
+        line = raw_line.decode("utf-8", errors="replace").strip()
+        if not line:
+            continue
+        data = json.loads(line)
+        msg = data.get("message") or {}
+        piece = msg.get("content") or ""
+        if piece:
+            if print_stream:
+                print(piece, end="", flush=True)
+            full_text += piece
+        if data.get("done") is True:
+            stats = ChatStats(
+                prompt_eval_count=data.get("prompt_eval_count"),
+                prompt_eval_duration_ns=data.get("prompt_eval_duration"),
+                eval_count=data.get("eval_count"),
+                eval_duration_ns=data.get("eval_duration"),
+            )
+    return full_text, stats
+
+
+def _try_models_in_order(preferred_model: str) -> list[str]:
+    """Return a list of model candidates to try.
+
+    The original implementation attempted automatic fallback between
+    ``qwen3-vl-8b`` and ``qwen3-vl:8b``. For the new ``--model`` option we
+    want to honour the exact model name supplied by the user. If the model
+    does not exist, we raise an error and ask the user to pull it via
+    ``ollama pull <model>``. Therefore we only try the preferred model.
+    """
+    return [preferred_model]
+
+
+def _analyze_one(
+    host: str,
+    model: str,
+    prompt: str,
+    image_path: str,
+    stream: bool,
+    timeout_s: int,
+    options: Optional[dict] = None,
+    print_stream: bool = True,
+) -> tuple[str, ChatStats, str]:
+    last_err: Optional[Exception] = None
+    for candidate_model in _try_models_in_order(model):
+        try:
+            text, stats = _ollama_chat(
+                host=host,
+                model=candidate_model,
+                prompt=prompt,
+                image_path=image_path,
+                stream=stream,
+                timeout_s=timeout_s,
+                options=options,
+                print_stream=print_stream,
+            )
+            return text, stats, candidate_model
+        except OllamaError as e:
+            last_err = e
+            msg = str(e).lower()
+            # 如果是模型名不匹配，自动在 qwen3-vl-8b <-> qwen3-vl:8b 之间回退一次。
+            if ("model" in msg and "not" in msg and "found" in msg) or ("not found" in msg):
+                continue
+            break
+    # If we reach here, all attempts failed.
+    if last_err:
+        msg = str(last_err).lower()
+        # Detect model‑not‑found errors and give a helpful hint.
+        if ("model" in msg and "not" in msg and "found" in msg) or ("not found" in msg):
+            raise OllamaError(
+                f"模型未找到: {model}. 请先执行 `ollama pull {model}` 再运行。"
+            ) from last_err
+        raise OllamaError(str(last_err)) from last_err
+    raise OllamaError("未知错误")
+
+
+def _print_stats(image_name: str, model_used: str, stats: ChatStats, started_at: float) -> None:
+    elapsed = time.time() - started_at
+    prompt_tokens = stats.prompt_eval_count or 0
+    prompt_dur_ns = stats.prompt_eval_duration_ns or 0
+    out_tokens = stats.eval_count or 0
+    out_dur_ns = stats.eval_duration_ns or 0
+    prompt_tps = (prompt_tokens / (prompt_dur_ns / 1e9)) if prompt_tokens and prompt_dur_ns else 0
+    out_tps = (out_tokens / (out_dur_ns / 1e9)) if out_tokens and out_dur_ns else 0
+
+    print("\n" + "-" * 20)
+    print(f"✅ 完成: {image_name}")
+    print(f"  > Model: {model_used}")
+    print(f"  > Prompt: {prompt_tokens} tokens | 耗时: {prompt_dur_ns / 1e9:.4f}s | TPS: {prompt_tps:.2f}")
+    print(f"  > Output: {out_tokens} tokens | 耗时: {out_dur_ns / 1e9:.4f}s | TPS: {out_tps:.2f}")
+    print(f"  > Total elapsed: {elapsed:.2f}s")
+    print("-" * 20)
+
+
+def _append_to_markdown(output_path: str, image_name: str, markdown: str) -> None:
+    with open(output_path, "a", encoding="utf-8") as f:
+        f.write(f"### 图片分析结果: `{image_name}`\n\n")
+        f.write(markdown.rstrip() + "\n\n")
+        f.write("---\n\n")
+
+
+def _build_argparser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="describe-image",
+        description="Use Ollama multimodal model to describe images and output Markdown.",
+    )
+    p.add_argument("image", nargs="?", help="Path to an image file to analyze.")
+    p.add_argument("--dir", help="Directory to batch analyze images.")
+    p.add_argument(
+        "--out",
+        help="Output markdown file path (for --dir). Default: image-description.md under --dir.",
+    )
+    p.add_argument("--model", default=DEFAULT_MODEL, help=f"Ollama model name (default: {DEFAULT_MODEL})")
+    p.add_argument("--host", help="Ollama host, e.g. http://localhost:11434 (default: $OLLAMA_HOST or localhost)")
+    p.add_argument("--no-stream", action="store_true", help="Disable streaming output.")
+    p.add_argument("--timeout", type=int, default=600, help="Request timeout in seconds (default: 600)")
+    p.add_argument("--prompt", help="Override prompt text.")
+    p.add_argument("--prompt-file", help="Load prompt text from a file (UTF-8).")
+    p.add_argument("--quiet", action="store_true", help="Only print timing stats (suppress model output).")
+    p.add_argument("--num-predict", type=int, help="Limit max output tokens (Ollama option: num_predict).")
+    p.add_argument("--temperature", type=float, help="Sampling temperature (Ollama option: temperature).")
+    p.add_argument("--seed", type=int, help="Sampling seed for determinism (Ollama option: seed).")
+    p.add_argument("--no-resume", action="store_true", help="Do not skip already processed images in output file.")
+    p.add_argument("--no-recursive", action="store_true", help="Do not scan subdirectories when using --dir.")
+    p.add_argument("--limit", type=int, help="Only process first N images (for quick verification).")
+    return p
+
+
+def main() -> int:
+    args = _build_argparser().parse_args()
+
+    if bool(args.image) == bool(args.dir):
+        print("Error: exactly one of <image> or --dir must be provided.", file=sys.stderr)
+        return 2
+
+    prompt = DEFAULT_PROMPT
+    if args.prompt_file:
+        with open(args.prompt_file, "r", encoding="utf-8") as f:
+            prompt = f.read()
+    elif args.prompt:
+        prompt = args.prompt
+
+    host = _normalize_ollama_host(args.host)
+    stream = not args.no_stream
+    timeout_s = int(args.timeout)
+    quiet = bool(args.quiet)
+    options: dict = {}
+    if args.num_predict is not None:
+        options["num_predict"] = int(args.num_predict)
+    if args.temperature is not None:
+        options["temperature"] = float(args.temperature)
+    if args.seed is not None:
+        options["seed"] = int(args.seed)
+    if not options:
+        options = {}
+
+    if args.image:
+        image_path = os.path.abspath(args.image)
+        if not os.path.isfile(image_path):
+            print(f"Error: file not found: {image_path}", file=sys.stderr)
+            return 2
+        if not _is_image_file(image_path):
+            print(f"Error: unsupported image type: {image_path}", file=sys.stderr)
+            return 2
+
+        started = time.time()
+        text, stats, model_used = _analyze_one(
+            host=host,
+            model=args.model,
+            prompt=prompt,
+            image_path=image_path,
+            stream=stream,
+            timeout_s=timeout_s,
+            options=options or None,
+            print_stream=not quiet,
+        )
+        if (not stream) and (not quiet):
+            print(text)
+        _print_stats(os.path.basename(image_path), model_used, stats, started)
+        return 0
+
+    target_dir = os.path.abspath(args.dir)
+    if not os.path.isdir(target_dir):
+        print(f"Error: directory not found: {target_dir}", file=sys.stderr)
+        return 2
+
+    out_path = os.path.abspath(args.out) if args.out else os.path.join(target_dir, "image-description.md")
+    _init_output_file(out_path, target_dir)
+    processed = set()
+    if not args.no_resume:
+        processed = _read_processed_image_names(out_path)
+
+    images = sorted(set(_iter_images_in_dir(target_dir, recursive=not args.no_recursive)))
+    if args.limit is not None:
+        images = images[: max(0, int(args.limit))]
+
+    if not images:
+        print(f"No images found under: {target_dir}")
+        return 0
+
+    print(f"目标目录: {target_dir}")
+    print(f"输出文件: {out_path}")
+    print(f"使用模型: {args.model} (若不匹配会自动回退到 {ALT_MODEL}/{DEFAULT_MODEL})")
+    print(f"已处理图片数量: {len(processed)} (resume={'off' if args.no_resume else 'on'})")
+    print(f"待检查图片数量: {len(images)}")
+
+    overall_start = time.time()
+    checked = 0
+    done = 0
+
+    for image_path in images:
+        checked += 1
+        image_name = os.path.basename(image_path)
+        if (not args.no_resume) and image_name in processed:
+            print(f"--- [{checked}/{len(images)}] 已跳过 (已处理): {image_name} ---")
+            continue
+
+        print(f"\n\n--- [{checked}/{len(images)}] 正在处理: {image_name} ---")
+        started = time.time()
+        try:
+            text, stats, model_used = _analyze_one(
+                host=host,
+                model=args.model,
+                prompt=prompt,
+                image_path=image_path,
+                stream=stream,
+                timeout_s=timeout_s,
+                options=options or None,
+                print_stream=not quiet,
+            )
+        except OllamaError as e:
+            print(f"\n[Error analyzing {image_name}]: {e}", file=sys.stderr)
+            continue
+        if stream and (not quiet):
+            print()
+        _print_stats(image_name, model_used, stats, started)
+        _append_to_markdown(out_path, image_name, text)
+        processed.add(image_name)
+        done += 1
+
+        elapsed = time.time() - overall_start
+        print(f"\n--- 总体进度: {done}/{len(images)} | 总耗时: {elapsed:.2f}s ---")
+
+    print(f"\n✅ 批处理完成：成功 {done} / 检查 {len(images)}")
+    print(f"结果已保存到: {out_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

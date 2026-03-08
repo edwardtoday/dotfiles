@@ -20,7 +20,7 @@ This file lists custom tools created to assist with development and automation t
 - `describe-image --dir 1.8 --limit 3`
 **Notes:**
 - Requires `ollama` to be installed and the service running (e.g. `ollama serve`).
-- Default model is `qwen3-vl:8b`, with automatic fallback to `qwen3-vl-8b`.
+- Default model is `qwen3-vl:8b`; if you override `--model`, the exact model name is used, and missing models should be pulled with `ollama pull <model>`.
 **Benchmarking:** For more stable speed comparisons across machines, use `--seed 1 --temperature 0 --num-predict 512` to reduce randomness.
 **Tip:** Use `--quiet` when benchmarking to avoid printing long model output.
 **Implementation:** Single-file Python CLI (stdlib only) that calls Ollama HTTP API and writes `image-description.md` under `--dir` by default.
