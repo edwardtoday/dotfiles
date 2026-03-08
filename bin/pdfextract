@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+runtime_dir="$HOME/.local/share/pdf_extract_tool"
+venv_dir="$runtime_dir/venv"
+core_py="$script_dir/pdfextract-core.py"
+
+ensure_runtime() {
+    if [ ! -f "$core_py" ]; then
+        echo "Error: bundled core script not found: $core_py" >&2
+        exit 1
+    fi
+
+    if [ ! -x "$venv_dir/bin/python" ]; then
+        echo "Initializing PDF extract tool environment..."
+        mkdir -p "$runtime_dir"
+        python3 -m venv "$venv_dir"
+    fi
+
+    if ! "$venv_dir/bin/python" -c 'import pypdf, cryptography' >/dev/null 2>&1; then
+        "$venv_dir/bin/pip" install --quiet pypdf cryptography
+    fi
+}
+
+ensure_runtime
+exec "$venv_dir/bin/python" "$core_py" "$@"

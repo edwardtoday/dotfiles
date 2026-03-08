@@ -7,7 +7,7 @@ This file lists custom tools created to assist with development and automation t
 **Description:** Extracts specific pages or page ranges from a PDF file.
 **Usage:** `pdfextract <input_file> <pages> <output_file>`
 **Example:** `pdfextract input.pdf 1-5,8,10-12 output.pdf`
-**Implementation:** Bash wrapper around a Python script using `pypdf` in a dedicated virtual environment (`~/.local/share/pdf_extract_tool`).
+**Implementation:** Bash wrapper that runs the versioned repo script `~/.bin/pdfextract-core.py`, with a dedicated virtual environment bootstrapped under `~/.local/share/pdf_extract_tool/venv` on first use.
 
 ## describe-image
 **Location:** `~/.bin/describe-image`

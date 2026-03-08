@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+target_script="$script_dir/pdfextract"
+base_path="${PATH:-/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin}"
+
+auto_home='' 
+
+run_target() {
+  env -i \
+    HOME="$auto_home" \
+    USER="${USER:-test}" \
+    LOGNAME="${LOGNAME:-test}" \
+    TERM="xterm-256color" \
+    PATH="$base_path" \
+    "$target_script" "$@"
+}
+
+cleanup() {
+  rm -rf "${auto_home:-}"
+}
+
+main() {
+  local input_pdf output_pdf venv_python
+
+  auto_home="$(mktemp -d)"
+  trap cleanup EXIT
+
+  run_target --help >/dev/null
+
+  venv_python="$auto_home/.local/share/pdf_extract_tool/venv/bin/python"
+  input_pdf="$auto_home/input.pdf"
+  output_pdf="$auto_home/output.pdf"
+
+  "$venv_python" - <<'PY' "$input_pdf"
+import sys
+from pypdf import PdfWriter
+
+writer = PdfWriter()
+for _ in range(3):
+    writer.add_blank_page(width=72, height=72)
+with open(sys.argv[1], 'wb') as f:
+    writer.write(f)
+PY
+
+  run_target "$input_pdf" '1-2,5' "$output_pdf" >/dev/null
+
+  "$venv_python" - <<'PY' "$output_pdf"
+import sys
+from pypdf import PdfReader
+
+reader = PdfReader(sys.argv[1])
+assert len(reader.pages) == 2, len(reader.pages)
+PY
+
+  echo 'pdfextract tests: ok'
+}
+
+main "$@"
