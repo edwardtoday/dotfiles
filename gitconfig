@@ -298,6 +298,7 @@
 	fsckObjects = true
 [http]
 	postBuffer = 524288000
+	lowSpeedLimit = 0
 [init]
 	defaultBranch = main
 [filter "lfs"]
