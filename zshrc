@@ -72,3 +72,9 @@ export PATH="$GEM_HOME/bin:$PATH"
 # Use user-level prefix for global npm installs
 export NPM_CONFIG_PREFIX="$HOME/.npm-global"
 export PATH="$HOME/.npm-global/bin:$PATH"
+
+# Go tools (go install)
+export PATH="$HOME/go/bin:$PATH"
+
+# Prefer Homebrew sqlite for local dev
+export PATH="/opt/homebrew/opt/sqlite/bin:$PATH"

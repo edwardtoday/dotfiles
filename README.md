@@ -22,6 +22,8 @@ To update, `cd` into your local `dotfiles` repository and then:
 ./install.rb
 ```
 
+If a target dot-directory already exists as a real directory instead of a symlink, the installer leaves it in place and prints a skip message so you can migrate it manually.
+
 ### Add custom commands without creating a new fork
 
 If `~/.extra_env` exists, it is sourced from the shell-agnostic profile and zsh interactive startup. Use it for private environment variables and portable helper functions you don’t want to commit to the public repository.
@@ -40,6 +42,8 @@ git config --global user.email "edwardtoday@gmail.com"
 ```
 
 You could also use `~/.extra_env` to override settings or add helper functions on top of this repository. It’s probably better to [fork this repository](https://github.com/edwardtoday/dotfiles/fork) instead, though.
+
+For example, keep private service credentials in `~/.extra_env`, such as `IMMICH_URL`, `IMMICH_QP_KEY`, `IMMICH_ZXF_KEY`, `IMMICH_QHY_KEY`, and `IMMICH_LJH_KEY`, so the public repo only contains Immich commands that reference those variables.
 
 ### Validate shell startup
 
@@ -80,4 +84,3 @@ You could also install native apps with [`brew cask`](https://github.com/phinze/
 ## Feedback
 
 Suggestions/improvements are [welcome](https://github.com/edwardtoday/dotfiles/issues)!
-

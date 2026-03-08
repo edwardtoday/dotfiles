@@ -516,12 +516,12 @@ immich_user() {
   shift
 
   if [ -z "${IMMICH_URL:-}" ]; then
-    echo "错误: 请在 ~/.extra 中设置 IMMICH_URL" >&2
+    echo "错误: 请在 ~/.extra_env 中设置 IMMICH_URL" >&2
     return 1
   fi
 
   if [ -z "$key" ]; then
-    echo "错误: 请在 ~/.extra 中设置对应的 IMMICH_*_KEY" >&2
+    echo "错误: 请在 ~/.extra_env 中设置对应的 IMMICH_*_KEY" >&2
     return 1
   fi
 

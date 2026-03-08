@@ -46,3 +46,10 @@ gemini/projects.json
 gemini/state.json
 gemini/trustedFolders.json
 gemini/user_id
+
+# Tool-installed external plugins / skills
+claude/plugins/
+codex/skills/
+codex/superpowers/
+codex/vendor_imports/
+gemini/extensions/
