@@ -285,11 +285,6 @@
 	whitespaceviolations = "!git diff --check $(git empty-tree-sha1)"
 	who = shortlog -s --
 
-[http "https://github.com"]
-  proxy = http://127.0.0.1:7890
-[https "https://github.com"]
-  proxy = http://127.0.0.1:7890
-
 [filter "hawser"]
 	clean = git hawser clean %f
 	smudge = git hawser smudge %f
@@ -306,3 +301,5 @@
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
+[include]
+	path = ~/.gitconfig.local

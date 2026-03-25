@@ -1,21 +1,27 @@
 model_provider = "codex"
-# model = "gpt-5.2"
-# model = "gpt-5.3-codex"
-# model = "gpt-5.3-codex-spark|[pro]"
 model = "gpt-5.4"
-notify = ["python3", "/Users/qingpei/.codex/notify.py"]
+notify = [ "python3", "/Users/qingpei/.codex/notify.py" ]
 disable_response_storage = true
 model_reasoning_effort = "xhigh"
 model_reasoning_summary = "detailed"
-# model_context_window=600000
 show_raw_agent_reasoning = true
 web_search = "live"
 personality = "pragmatic"
+sandbox_mode = "danger-full-access"
+approval_policy = "on-request"
+service_tier = "fast"
+model_context_window = 800000
+model_auto_compact_token_limit = 700000
+
+[model_providers.lab]
+name = "lab"
+base_url = "https://lab.sansi.io/v1"
+wire_api = "responses"
+requires_openai_auth = true
 
 [model_providers.codex]
 name = "codex"
 base_url = "https://code.ppchat.vip/v1"
-# base_url = "https://code.pumpkinai.vip/v1"
 wire_api = "responses"
 requires_openai_auth = true
 
@@ -23,23 +29,22 @@ requires_openai_auth = true
 command = "/Users/qingpei/.npm-global/bin/chrome-devtools-mcp"
 args = []
 
-[mcp_servers.playwright]
-# Avoid `npx` startup overhead/hangs during MCP handshake.
-command = "/Users/qingpei/.npm-global/bin/playwright-mcp"
-args = []
-startup_timeout_sec = 30
-
-[mcp_servers.figma]
-url = "https://mcp.figma.com/mcp"
-
 [mcp_servers.gitlab]
 command = "/Users/qingpei/.npm-global/bin/gitlab-mcp"
 args = []
 startup_timeout_sec = 30
 
+[mcp_servers.playwright]
+args = [ "@playwright/mcp@latest" ]
+command = "npx"
+
+[mcp_servers.pencil]
+command = "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64"
+args = [ "--app", "desktop" ]
+
 [features]
-shell_snapshot = true           # Speed up repeated commands
-unified_exec = true             # Use the unified PTY-backed exec tool
+shell_snapshot = true
+unified_exec = true
 skills = true
 js_repl = true
 multi_agent = true
@@ -50,23 +55,15 @@ hide_gpt5_1_migration_prompt = true
 hide_full_access_warning = true
 
 [notice.model_migrations]
-"gpt-5.2" = "gpt-5.3-codex"
+"gpt-5.2" = "gpt-5.4"
+"gpt-5.3-codex" = "gpt-5.4"
 
 [profiles.skill-install]
-# 1) 让 Codex 可以在工作区里写文件 + 运行安装命令
 sandbox_mode = "workspace-write"
-# 2) 关键：不要用 untrusted；用 on-request 让它每次要跑命令时问你
 approval_policy = "on-request"
-# 3) 关键：允许 workspace-write 沙箱出网（不然 GitHub 拉不下来）
 
 [sandbox_workspace_write]
 network_access = true
 
-[projects."/Users/qingpei/git/dotfiles"]
-trust_level = "trusted"
-
-[projects."/Users/qingpei"]
-trust_level = "trusted"
-
 [tui]
-status_line = ["model-with-reasoning", "context-remaining", "current-dir", "git-branch", "context-window-size"]
+status_line = [ "model-with-reasoning", "context-remaining", "current-dir", "git-branch", "context-window-size" ]
