@@ -31,3 +31,10 @@ This file lists custom tools created to assist with development and automation t
 **Usage:** `shell-startup-smoke-check`
 **Example:** `shell-startup-smoke-check`
 **Implementation:** Bash CLI with a companion fixture test script at `bin/test-shell-startup-smoke-check`.
+
+## codex-doctor
+**Location:** `~/.bin/codex-doctor`
+**Description:** Checks the local Codex environment, including `~/.codex/config.toml`, key feature flags, custom skills, MCP server command paths, and supporting `AGENTS` files.
+**Usage:** `codex-doctor [--verbose]`
+**Example:** `codex-doctor --verbose`
+**Implementation:** Bash CLI with a companion fixture test script at `bin/test-codex-doctor`.

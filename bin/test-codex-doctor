@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TARGET_SCRIPT="${REPO_ROOT}/bin/codex-doctor"
+TMP_DIR="$(mktemp -d)"
+SUCCESS_HOME="${TMP_DIR}/success"
+FAIL_HOME="${TMP_DIR}/failure"
+
+cleanup() {
+  rm -rf "$TMP_DIR"
+}
+
+write_success_fixture() {
+  mkdir -p "${SUCCESS_HOME}/.codex/skills/.system"
+  mkdir -p "${SUCCESS_HOME}/.codex/skills/go-dev"
+  mkdir -p "${SUCCESS_HOME}/.codex/skills/python-dev"
+  mkdir -p "${SUCCESS_HOME}/.codex/skills/ops-safety"
+  mkdir -p "${SUCCESS_HOME}/.AGENTS.d"
+  mkdir -p "${SUCCESS_HOME}/.bin"
+
+  ln -s "$TARGET_SCRIPT" "${SUCCESS_HOME}/.bin/codex-doctor"
+
+  cat > "${SUCCESS_HOME}/.codex/skills/.system/.codex-system-skills.marker" <<'EOF'
+marker
+EOF
+
+  cat > "${SUCCESS_HOME}/.codex/skills/go-dev/SKILL.md" <<'EOF'
+# go-dev
+EOF
+  cat > "${SUCCESS_HOME}/.codex/skills/python-dev/SKILL.md" <<'EOF'
+# python-dev
+EOF
+  cat > "${SUCCESS_HOME}/.codex/skills/ops-safety/SKILL.md" <<'EOF'
+# ops-safety
+EOF
+
+  cat > "${SUCCESS_HOME}/.AGENTS.md" <<'EOF'
+# AGENTS
+EOF
+  cat > "${SUCCESS_HOME}/.AGENTS.d/README.md" <<'EOF'
+# AGENTS.d
+EOF
+
+  cat > "${SUCCESS_HOME}/.codex/config.toml" <<'EOF'
+[features]
+skills = true
+js_repl = true
+multi_agent = true
+unified_exec = true
+
+[mcp_servers.local-ok]
+command = "/bin/echo"
+
+[mcp_servers.remote-ok]
+url = "https://example.com/mcp"
+EOF
+}
+
+write_failure_fixture() {
+  mkdir -p "${FAIL_HOME}/.codex/skills/.system"
+  mkdir -p "${FAIL_HOME}/.codex/skills/go-dev"
+  mkdir -p "${FAIL_HOME}/.bin"
+
+  cat > "${FAIL_HOME}/.codex/skills/.system/.codex-system-skills.marker" <<'EOF'
+marker
+EOF
+  cat > "${FAIL_HOME}/.codex/skills/go-dev/SKILL.md" <<'EOF'
+# go-dev
+EOF
+
+  cat > "${FAIL_HOME}/.codex/config.toml" <<'EOF'
+[features]
+skills = true
+js_repl = false
+multi_agent = true
+unified_exec = true
+
+[mcp_servers.local-bad]
+command = "/missing/mcp-server"
+EOF
+}
+
+assert_success_fixture() {
+  local output
+  output="$(
+    env -i \
+      HOME="$SUCCESS_HOME" \
+      PATH="${SUCCESS_HOME}/.bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+      "$TARGET_SCRIPT"
+  )"
+
+  printf '%s\n' "$output" | grep -q "FAIL" && {
+    printf 'Expected success fixture to have no FAIL output.\n' >&2
+    printf '%s\n' "$output" >&2
+    return 1
+  }
+
+  printf '%s\n' "$output" | grep -q "custom skill present: go-dev"
+  printf '%s\n' "$output" | grep -q "MCP local-ok: command /bin/echo"
+}
+
+assert_failure_fixture() {
+  local output
+  if output="$(
+    env -i \
+      HOME="$FAIL_HOME" \
+      PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+      "$TARGET_SCRIPT" 2>&1
+  )"; then
+    printf 'Expected failure fixture to return non-zero.\n' >&2
+    printf '%s\n' "$output" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$output" | grep -q "custom skill missing"
+  printf '%s\n' "$output" | grep -q "missing command path"
+}
+
+main() {
+  trap cleanup EXIT
+
+  write_success_fixture
+  write_failure_fixture
+
+  assert_success_fixture
+  assert_failure_fixture
+
+  echo "codex-doctor test: ok"
+}
+
+main "$@"

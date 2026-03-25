@@ -1,0 +1,341 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+CONFIG_FILE="${CODEX_HOME}/config.toml"
+SKILLS_DIR="${CODEX_HOME}/skills"
+BIN_DIR="${HOME}/.bin"
+AGENTS_FILE="${HOME}/.AGENTS.md"
+AGENTS_DIR="${HOME}/.AGENTS.d"
+
+PASS_COUNT=0
+WARN_COUNT=0
+FAIL_COUNT=0
+VERBOSE=0
+
+REQUIRED_FEATURES=(
+  skills
+  js_repl
+  multi_agent
+  unified_exec
+)
+
+RECOMMENDED_COMMANDS=(
+  git
+  rg
+  python3
+)
+
+CUSTOM_SKILLS=(
+  go-dev
+  python-dev
+  ops-safety
+)
+
+usage() {
+  cat <<'EOF'
+Usage: codex-doctor [--verbose]
+
+Checks the local Codex environment, including:
+- ~/.codex/config.toml presence and key feature flags
+- ~/.codex/skills and selected custom skills
+- configured MCP servers and local command paths
+- supporting files such as ~/.AGENTS.md and ~/.AGENTS.d
+
+Options:
+  --verbose   Show discovered MCP sections and skill directories
+  --help      Show this help message
+EOF
+}
+
+log_result() {
+  local level="$1"
+  local label="$2"
+  local detail="$3"
+
+  case "$level" in
+    PASS) PASS_COUNT=$((PASS_COUNT + 1)) ;;
+    WARN) WARN_COUNT=$((WARN_COUNT + 1)) ;;
+    FAIL) FAIL_COUNT=$((FAIL_COUNT + 1)) ;;
+  esac
+
+  printf '%-4s %s' "$level" "$label"
+  if [ -n "$detail" ]; then
+    printf ': %s' "$detail"
+  fi
+  printf '\n'
+}
+
+pass() {
+  log_result "PASS" "$1" "${2:-}"
+}
+
+warn() {
+  log_result "WARN" "$1" "${2:-}"
+}
+
+fail() {
+  log_result "FAIL" "$1" "${2:-}"
+}
+
+section() {
+  printf '\n== %s ==\n' "$1"
+}
+
+trim_quotes() {
+  local value="$1"
+  value="${value#\"}"
+  value="${value%\"}"
+  printf '%s' "$value"
+}
+
+read_top_level_value() {
+  local section_name="$1"
+  local key="$2"
+
+  awk -v section_name="$section_name" -v key="$key" '
+    $0 ~ "^\\[" section_name "\\][[:space:]]*$" { in_section = 1; next }
+    in_section && /^[[:space:]]*\[/ { exit }
+    in_section && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+      line = $0
+      sub(/^[^=]*=[[:space:]]*/, "", line)
+      sub(/[[:space:]]*#.*/, "", line)
+      print line
+      exit
+    }
+  ' "$CONFIG_FILE"
+}
+
+list_mcp_servers() {
+  awk '
+    /^\[mcp_servers\./ {
+      line = $0
+      sub(/^\[mcp_servers\./, "", line)
+      sub(/\][[:space:]]*$/, "", line)
+      print line
+    }
+  ' "$CONFIG_FILE"
+}
+
+read_mcp_value() {
+  local server_name="$1"
+  local key="$2"
+
+  awk -v server_name="$server_name" -v key="$key" '
+    $0 ~ "^\\[mcp_servers\\." server_name "\\][[:space:]]*$" { in_section = 1; next }
+    in_section && /^[[:space:]]*\[/ { exit }
+    in_section && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+      line = $0
+      sub(/^[^=]*=[[:space:]]*/, "", line)
+      sub(/[[:space:]]*#.*/, "", line)
+      print line
+      exit
+    }
+  ' "$CONFIG_FILE"
+}
+
+check_home_and_config() {
+  section "Codex Home"
+
+  if [ -d "$CODEX_HOME" ]; then
+    pass "codex home present" "$CODEX_HOME"
+  else
+    fail "codex home missing" "$CODEX_HOME"
+    return
+  fi
+
+  if [ -L "$CODEX_HOME" ]; then
+    pass "codex home symlinked" "$(readlink "$CODEX_HOME")"
+  else
+    warn "codex home is not a symlink" "This is fine if the directory is managed directly."
+  fi
+
+  if [ -f "$CONFIG_FILE" ]; then
+    pass "config present" "$CONFIG_FILE"
+  else
+    fail "config missing" "$CONFIG_FILE"
+  fi
+
+  if [ -f "$AGENTS_FILE" ]; then
+    pass "AGENTS entry present" "$AGENTS_FILE"
+  else
+    warn "AGENTS entry missing" "$AGENTS_FILE"
+  fi
+
+  if [ -d "$AGENTS_DIR" ]; then
+    pass "AGENTS.d present" "$AGENTS_DIR"
+  else
+    warn "AGENTS.d missing" "$AGENTS_DIR"
+  fi
+}
+
+check_features() {
+  section "Features"
+
+  if [ ! -f "$CONFIG_FILE" ]; then
+    fail "feature checks skipped" "config.toml is missing"
+    return
+  fi
+
+  for feature_name in "${REQUIRED_FEATURES[@]}"; do
+    local raw_value
+    raw_value="$(read_top_level_value "features" "$feature_name" || true)"
+    raw_value="$(printf '%s' "$raw_value" | tr -d '[:space:]')"
+
+    if [ "$raw_value" = "true" ]; then
+      pass "feature ${feature_name}=true"
+    elif [ -n "$raw_value" ]; then
+      warn "feature ${feature_name} not enabled" "current value: ${raw_value}"
+    else
+      warn "feature ${feature_name} not found" "Check [features] in config.toml."
+    fi
+  done
+}
+
+check_skills() {
+  section "Skills"
+
+  if [ ! -d "$SKILLS_DIR" ]; then
+    fail "skills dir missing" "$SKILLS_DIR"
+    return
+  fi
+
+  local skill_dir_count
+  skill_dir_count="$(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d '[:space:]')"
+  pass "skills dir present" "${SKILLS_DIR} (${skill_dir_count} directories)"
+
+  if [ -f "${SKILLS_DIR}/.system/.codex-system-skills.marker" ]; then
+    pass "system skill marker present" "${SKILLS_DIR}/.system/.codex-system-skills.marker"
+  else
+    warn "system skill marker missing" "${SKILLS_DIR}/.system/.codex-system-skills.marker"
+  fi
+
+  for skill_name in "${CUSTOM_SKILLS[@]}"; do
+    local skill_file="${SKILLS_DIR}/${skill_name}/SKILL.md"
+    if [ -f "$skill_file" ]; then
+      pass "custom skill present" "${skill_name}"
+    else
+      fail "custom skill missing" "$skill_file"
+    fi
+  done
+
+  if command -v codex-doctor >/dev/null 2>&1; then
+    pass "codex-doctor on PATH" "$(command -v codex-doctor)"
+  else
+    warn "codex-doctor not on PATH" "Expected via ${BIN_DIR}."
+  fi
+
+  if [ "$VERBOSE" -eq 1 ]; then
+    printf '\n'
+    find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d | sort | sed 's/^/  - /'
+    printf '\n'
+  fi
+}
+
+check_mcp_servers() {
+  section "MCP Servers"
+
+  if [ ! -f "$CONFIG_FILE" ]; then
+    fail "MCP checks skipped" "config.toml is missing"
+    return
+  fi
+
+  local server_names
+  server_names="$(list_mcp_servers || true)"
+
+  if [ -z "$server_names" ]; then
+    warn "no MCP servers found" "Check [mcp_servers.*] sections in config.toml."
+    return
+  fi
+
+  local server_name
+  while IFS= read -r server_name; do
+    [ -n "$server_name" ] || continue
+
+    local command_value url_value trimmed_command trimmed_url
+    command_value="$(read_mcp_value "$server_name" "command" || true)"
+    url_value="$(read_mcp_value "$server_name" "url" || true)"
+    trimmed_command="$(trim_quotes "$command_value")"
+    trimmed_url="$(trim_quotes "$url_value")"
+
+    if [ -n "$trimmed_command" ]; then
+      if [[ "$trimmed_command" = /* ]]; then
+        if [ -x "$trimmed_command" ]; then
+          pass "MCP ${server_name}" "command ${trimmed_command}"
+        elif [ -e "$trimmed_command" ]; then
+          fail "MCP ${server_name}" "command exists but is not executable: ${trimmed_command}"
+        else
+          fail "MCP ${server_name}" "missing command path: ${trimmed_command}"
+        fi
+      elif command -v "$trimmed_command" >/dev/null 2>&1; then
+        pass "MCP ${server_name}" "command $(command -v "$trimmed_command")"
+      else
+        fail "MCP ${server_name}" "command not found on PATH: ${trimmed_command}"
+      fi
+    elif [ -n "$trimmed_url" ]; then
+      pass "MCP ${server_name}" "remote ${trimmed_url}"
+    else
+      warn "MCP ${server_name}" "No command or url configured."
+    fi
+  done <<< "$server_names"
+
+  if [ "$VERBOSE" -eq 1 ]; then
+    printf '\n'
+    while IFS= read -r server_name; do
+      [ -n "$server_name" ] || continue
+      printf '  - %s\n' "$server_name"
+    done <<< "$server_names"
+  fi
+}
+
+check_supporting_commands() {
+  section "Supporting Commands"
+
+  local command_name
+  for command_name in "${RECOMMENDED_COMMANDS[@]}"; do
+    if command -v "$command_name" >/dev/null 2>&1; then
+      pass "command available" "${command_name} -> $(command -v "$command_name")"
+    else
+      warn "command missing" "$command_name"
+    fi
+  done
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --verbose)
+        VERBOSE=1
+        ;;
+      --help|-h)
+        usage
+        exit 0
+        ;;
+      *)
+        printf 'Unknown argument: %s\n\n' "$1" >&2
+        usage >&2
+        exit 2
+        ;;
+    esac
+    shift
+  done
+}
+
+main() {
+  parse_args "$@"
+
+  check_home_and_config
+  check_features
+  check_skills
+  check_mcp_servers
+  check_supporting_commands
+
+  printf '\nSummary: %s pass, %s warn, %s fail\n' "$PASS_COUNT" "$WARN_COUNT" "$FAIL_COUNT"
+
+  if [ "$FAIL_COUNT" -gt 0 ]; then
+    exit 1
+  fi
+}
+
+main "$@"

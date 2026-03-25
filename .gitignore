@@ -3,8 +3,13 @@ oh-my-zsh
 zsh-update
 .AGENTS.md
 config
+!config/
+config/*
+!config/ghostty/
+!config/ghostty/**
 
 # Claude local state
+claude/backups/
 claude/cache/
 claude/debug/
 claude/file-history/
@@ -20,13 +25,20 @@ claude/todos/
 # Codex local state
 codex/.codex-global-state.json
 codex/.personality_migration
+codex/archived_sessions/
 codex/auth.json
 codex/auth.txt
 codex/history.jsonl
 codex/history.jsonl.bak
 codex/log/
+codex/logs_*.sqlite
+codex/logs_*.sqlite-shm
+codex/logs_*.sqlite-wal
+codex/prompts/
 codex/sessions/
+codex/session_index.jsonl
 codex/shell_snapshots/
+codex/skills-backups/
 codex/sqlite/
 codex/state_*.sqlite
 codex/state_*.sqlite-shm

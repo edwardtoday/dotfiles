@@ -1,0 +1,88 @@
+# Ghostty profile for macOS, adapted from:
+# https://gist.github.com/zhangchitc/7dead7c1b517390e061e07759ed80277
+#
+# Maple Mono NF CN matches the reference look when installed locally.
+# MesloLGS NF is used as a safe fallback on this machine.
+
+# Typography
+font-family = "Maple Mono NF CN"
+font-size = 14
+font-thicken = true
+adjust-cell-height = 2
+adjust-cursor-thickness = 175%
+
+# https://ghostty.org/docs/config/reference#font-feature
+# font-feature = -liga
+# font-feature = -ss20
+# font-feature = -calt
+# disable dlig so that we see `--` instead of something like `—`
+font-feature = -dlig
+
+# Theme and colors
+# theme = dark:Catppuccin Mocha,light:Catppuccin Latte
+theme = dark:Catppuccin Mocha,light:Ayu Light
+
+# Window and appearance
+alpha-blending = linear-corrected
+background-opacity = 0.95
+background-blur = 30
+macos-titlebar-style = transparent
+window-colorspace = display-p3
+window-padding-x = 10
+window-padding-y = 8
+window-save-state = always
+window-theme = auto
+
+# Cursor
+cursor-style = bar
+cursor-style-blink = true
+cursor-opacity = 0.8
+
+# Mouse
+mouse-hide-while-typing = true
+copy-on-select = clipboard
+
+# Quick terminal
+quick-terminal-position = top
+quick-terminal-screen = mouse
+quick-terminal-autohide = true
+quick-terminal-animation-duration = 0.15
+
+# Security
+clipboard-paste-protection = true
+clipboard-paste-bracketed-safe = true
+
+# Shell integration
+shell-integration = detect
+
+# Keybindings: tabs
+keybind = cmd+t=new_tab
+keybind = cmd+shift+left=previous_tab
+keybind = cmd+shift+right=next_tab
+keybind = cmd+w=close_surface
+
+# Keybindings: splits
+keybind = cmd+d=new_split:right
+keybind = cmd+shift+d=new_split:down
+keybind = cmd+alt+left=goto_split:left
+keybind = cmd+alt+right=goto_split:right
+keybind = cmd+alt+up=goto_split:top
+keybind = cmd+alt+down=goto_split:bottom
+
+# Keybindings: font size
+keybind = cmd+==increase_font_size:1
+keybind = cmd++=increase_font_size:1
+keybind = cmd+-=decrease_font_size:1
+keybind = cmd+0=reset_font_size
+
+# Keybindings: quick terminal and layout
+keybind = global:ctrl+grave_accent=toggle_quick_terminal
+keybind = cmd+shift+e=equalize_splits
+keybind = cmd+shift+f=toggle_split_zoom
+keybind = cmd+shift+,=reload_config
+
+# Approximate the kitty scrollback_lines=8000 setting.
+# Note: This is in bytes, not lines.
+# https://github.com/ghostty-org/ghostty/blob/0f2f0ab69f65941ab85c0563abdc5583d1983527/src/config/Config.zig#L812
+# default is 10MB
+scrollback-limit = 10000000

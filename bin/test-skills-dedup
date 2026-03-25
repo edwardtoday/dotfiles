@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TARGET_SCRIPT="${REPO_ROOT}/bin/skills-dedup"
+TMP_DIR="$(mktemp -d)"
+PRIMARY_DIR="${TMP_DIR}/primary"
+SECONDARY_DIR="${TMP_DIR}/secondary"
+BACKUP_DIR="${TMP_DIR}/backups"
+SKILL_ROOT="${TMP_DIR}/skill-root"
+
+cleanup() {
+  rm -rf "$TMP_DIR"
+}
+
+write_fixture() {
+  mkdir -p "${PRIMARY_DIR}/alpha"
+  mkdir -p "${SECONDARY_DIR}/alpha"
+  mkdir -p "${SECONDARY_DIR}/beta"
+  mkdir -p "${SKILL_ROOT}/scripts"
+
+  cat > "${SKILL_ROOT}/scripts/dedup_skill_dirs.py" <<'EOF'
+#!/usr/bin/env python3
+import argparse
+import json
+import os
+import shutil
+
+
+def scan(primary, secondary):
+    duplicates = sorted(
+        name for name in os.listdir(secondary)
+        if os.path.isdir(os.path.join(secondary, name)) and os.path.isdir(os.path.join(primary, name))
+    )
+    return {"duplicates": duplicates}
+
+
+def cleanup(primary, secondary, backup_root, timestamp, apply):
+    result = {"mode": "apply" if apply else "preview", "moved": []}
+    duplicates = scan(primary, secondary)["duplicates"]
+    target_root = os.path.join(backup_root, f"removed-duplicate-skills-{timestamp}")
+
+    if apply:
+        os.makedirs(target_root, exist_ok=True)
+
+    for name in duplicates:
+        src = os.path.join(secondary, name)
+        dst = os.path.join(target_root, name)
+        if apply:
+            shutil.move(src, dst)
+        result["moved"].append(name)
+
+    print(json.dumps(result))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    scan_parser = sub.add_parser("scan")
+    scan_parser.add_argument("--primary", required=True)
+    scan_parser.add_argument("--secondary", required=True)
+
+    cleanup_parser = sub.add_parser("cleanup")
+    cleanup_parser.add_argument("--primary", required=True)
+    cleanup_parser.add_argument("--secondary", required=True)
+    cleanup_parser.add_argument("--backup-root", required=True)
+    cleanup_parser.add_argument("--timestamp", required=True)
+    cleanup_parser.add_argument("--apply", action="store_true")
+
+    args = parser.parse_args()
+    if args.command == "scan":
+        print(json.dumps(scan(args.primary, args.secondary)))
+    else:
+        cleanup(args.primary, args.secondary, args.backup_root, args.timestamp, args.apply)
+
+
+if __name__ == "__main__":
+    main()
+EOF
+
+  chmod 755 "${SKILL_ROOT}/scripts/dedup_skill_dirs.py"
+}
+
+assert_scan_reports_duplicate() {
+  local output
+
+  output="$(
+    env -i \
+      HOME="/Users/qingpei" \
+      SKILL_ROOT="$SKILL_ROOT" \
+      PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+      "$TARGET_SCRIPT" scan \
+      --primary "$PRIMARY_DIR" \
+      --secondary "$SECONDARY_DIR"
+  )"
+
+  printf '%s\n' "$output" | grep -q '"duplicates": \['
+  printf '%s\n' "$output" | grep -q '"alpha"'
+}
+
+assert_apply_moves_duplicate() {
+  local output
+
+  output="$(
+    env -i \
+      HOME="/Users/qingpei" \
+      SKILL_ROOT="$SKILL_ROOT" \
+      PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+      "$TARGET_SCRIPT" apply \
+      --primary "$PRIMARY_DIR" \
+      --secondary "$SECONDARY_DIR" \
+      --backup-root "$BACKUP_DIR" \
+      --timestamp "20260314-test"
+  )"
+
+  printf '%s\n' "$output" | grep -q '"mode": "apply"'
+  printf '%s\n' "$output" | grep -q '"moved": \['
+  [ -d "${BACKUP_DIR}/removed-duplicate-skills-20260314-test/alpha" ]
+  [ ! -d "${SECONDARY_DIR}/alpha" ]
+}
+
+main() {
+  trap cleanup EXIT
+  write_fixture
+  assert_scan_reports_duplicate
+  assert_apply_moves_duplicate
+  echo "skills-dedup test: ok"
+}
+
+main "$@"
