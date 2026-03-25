@@ -453,6 +453,129 @@ video-genmatrix-4x4() {
 
 function gi() { curl -sLw "\n" https://www.toptal.com/developers/gitignore/api/$@; }
 
+function pyclean() {
+    find "${@:-.}" -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
+    find "${@:-.}" -type d -name "__pycache__" -exec rm -rf "{}" +
+    find "${@:-.}" -depth -type d -name ".mypy_cache" -exec rm -rf "{}" +
+    find "${@:-.}" -depth -type d -name ".pytest_cache" -exec rm -rf "{}" +
+}
+
+function vrun() {
+    local name="${1:-}"
+    local candidate
+
+    if [ -z "$name" ]; then
+        for candidate in "${PYTHON_VENV_NAME:-venv}" venv .venv; do
+            if [ -d "$candidate" ]; then
+                name="$candidate"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$name" ] || [ ! -d "$name" ]; then
+        echo "Error: no virtual environment found in current directory" >&2
+        return 1
+    fi
+
+    if [ ! -f "$name/bin/activate" ]; then
+        echo "Error: '$name' is not a proper virtual environment" >&2
+        return 1
+    fi
+
+    . "$name/bin/activate" || return $?
+    echo "Activated virtual environment $name"
+}
+
+function mkv() {
+    local name="${1:-${PYTHON_VENV_NAME:-venv}}"
+
+    python3 -m venv "$name" || return $?
+    echo "Created venv in '$name'" >&2
+    vrun "$name"
+}
+
+function pipupall() {
+    pip list --outdated --format=freeze | cut -d= -f1 | xargs -n1 pip install --upgrade
+}
+
+function pipunall() {
+    pip list --format=freeze | cut -d= -f1 | xargs -n1 pip uninstall
+}
+
+function pipig() {
+    pip install "git+https://github.com/$1.git"
+}
+
+function pipigb() {
+    pip install "git+https://github.com/$1.git@$2"
+}
+
+function pipigp() {
+    pip install "git+https://github.com/$1.git@refs/pull/$2/head"
+}
+
+function ofd() {
+    if [ $# -eq 0 ]; then
+        open .
+    else
+        open "$@"
+    fi
+}
+
+function ta() {
+    if [ -z "${1:-}" ] || [ "${1#-}" != "$1" ]; then
+        tmux attach "$@"
+    else
+        tmux attach -t "$@"
+    fi
+}
+
+function tad() {
+    if [ -z "${1:-}" ] || [ "${1#-}" != "$1" ]; then
+        tmux attach -d "$@"
+    else
+        tmux attach -d -t "$@"
+    fi
+}
+
+function to() {
+    if [ -z "${1:-}" ] || [ "${1#-}" != "$1" ]; then
+        tmux new-session -A "$@"
+    else
+        tmux new-session -A -s "$@"
+    fi
+}
+
+function ts() {
+    if [ -z "${1:-}" ] || [ "${1#-}" != "$1" ]; then
+        tmux new-session "$@"
+    else
+        tmux new-session -s "$@"
+    fi
+}
+
+function tkss() {
+    if [ -z "${1:-}" ] || [ "${1#-}" != "$1" ]; then
+        tmux kill-session "$@"
+    else
+        tmux kill-session -t "$@"
+    fi
+}
+
+function tds() {
+    local dir md5 session_name
+
+    dir=$(basename "$PWD")
+    if command -v md5sum >/dev/null 2>&1; then
+        md5=$(printf '%s' "$PWD" | md5sum | awk '{print $1}')
+    else
+        md5=$(printf '%s' "$PWD" | md5 -q)
+    fi
+    session_name="${dir}-$(printf '%s' "$md5" | cut -c1-6)"
+    tmux new -As "$session_name"
+}
+
 ## update the create date to make it accessible and remove the resumable copy flag
 ## https://apple.stackexchange.com/a/463951
 

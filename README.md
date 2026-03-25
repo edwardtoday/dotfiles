@@ -24,6 +24,12 @@ To update, `cd` into your local `dotfiles` repository and then:
 
 If a target dot-directory already exists as a real directory instead of a symlink, the installer leaves it in place and prints a skip message so you can migrate it manually.
 
+### Ghostty
+
+Ghostty is managed from `config/ghostty/config.ghostty` and will be symlinked to `~/.config/ghostty/config.ghostty` by `./install.rb`.
+
+The current profile is tuned for macOS and uses Catppuccin light/dark theme switching, translucent background blur, a Quake-style quick terminal, and custom split/tab keybindings. It prefers `Maple Mono NF CN` and falls back to `MesloLGS NF` if Maple is not installed.
+
 ### Add custom commands without creating a new fork
 
 If `~/.extra_env` exists, it is sourced from the shell-agnostic profile and zsh interactive startup. Use it for private environment variables and portable helper functions you don’t want to commit to the public repository.
@@ -44,6 +50,14 @@ git config --global user.email "edwardtoday@gmail.com"
 You could also use `~/.extra_env` to override settings or add helper functions on top of this repository. It’s probably better to [fork this repository](https://github.com/edwardtoday/dotfiles/fork) instead, though.
 
 For example, keep private service credentials in `~/.extra_env`, such as `IMMICH_URL`, `IMMICH_QP_KEY`, `IMMICH_ZXF_KEY`, `IMMICH_QHY_KEY`, and `IMMICH_LJH_KEY`, so the public repo only contains Immich commands that reference those variables.
+
+### Zsh prompt
+
+Interactive `zsh` now uses [`starship`](https://starship.rs/) for prompt rendering and no longer depends on loading the `oh-my-zsh` framework during startup.
+
+`./install.rb` will symlink [`config/starship.toml`](config/starship.toml) to `~/.config/starship.toml`. Install the binary with `brew bundle ~/.Brewfile` or `brew install starship`.
+
+The shell still keeps `zsh-autocomplete`, `atuin`, `zoxide`, `zsh-autosuggestions`, and `zsh-syntax-highlighting`, plus a small compatibility layer for the most-used old `oh-my-zsh` aliases and helper functions. `compinit` is now owned by `zsh-autocomplete`; avoid adding a second manual `compinit` block in `~/.zshrc`.
 
 ### Validate shell startup
 

@@ -1,0 +1,92 @@
+"$schema" = "https://starship.rs/config-schema.json"
+
+add_newline = false
+continuation_prompt = "[∙](bright-black) "
+format = """
+$conda$username$hostname$directory$git_branch$git_status$python$ruby$nodejs$golang$rust$package
+$character"""
+right_format = "$status$cmd_duration"
+
+scan_timeout = 20
+command_timeout = 500
+
+[username]
+show_always = true
+style_user = "bold green"
+style_root = "bold red"
+format = "[$user]($style) "
+
+[hostname]
+ssh_only = false
+style = "bold yellow"
+format = "[@$hostname]($style) "
+
+[directory]
+style = "bold blue"
+truncate_to_repo = false
+truncation_length = 4
+format = "in [$path]($style)[$read_only]($read_only_style) "
+read_only = " ro"
+read_only_style = "red"
+
+[git_branch]
+symbol = ""
+style = "bold yellow"
+format = "on [$branch]($style)"
+
+[git_status]
+style = "yellow"
+format = "[ $all_status$ahead_behind]($style) "
+
+[python]
+symbol = ""
+style = "bright-black"
+format = "[py ${pyenv_prefix}${version}(\\($virtualenv\\))]($style) "
+
+[ruby]
+symbol = ""
+style = "bright-black"
+format = "[rb $version]($style) "
+
+[nodejs]
+symbol = ""
+style = "bright-black"
+format = "[node $version]($style) "
+
+[golang]
+symbol = ""
+style = "bright-black"
+format = "[go $version]($style) "
+
+[rust]
+symbol = ""
+style = "bright-black"
+format = "[rs $version]($style) "
+
+[package]
+style = "bright-black"
+format = "[pkg $version]($style) "
+
+[conda]
+symbol = ""
+style = "bright-black"
+format = "[conda $environment]($style) "
+
+[status]
+disabled = false
+style = "bold red"
+format = "[$status ↵]($style) "
+
+[cmd_duration]
+min_time = 0
+show_milliseconds = true
+style = "bold yellow"
+format = "[${duration}]($style)"
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+vimcmd_symbol = "[❮](bold green)"
+vimcmd_replace_one_symbol = "[❮](bold yellow)"
+vimcmd_replace_symbol = "[❮](bold yellow)"
+vimcmd_visual_symbol = "[❮](bold magenta)"

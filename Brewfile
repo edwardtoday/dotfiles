@@ -20,6 +20,7 @@ brew "node", link: false
 brew "autojump"
 brew "ack"
 brew "bat"
+brew "starship"
 brew "tmux"
 brew "vim"
 brew "wget"
@@ -61,5 +62,7 @@ brew "media-info"
 brew "exiftool"
 brew "yt-dlp"
 
-# GUI 应用（cask）建议按实际使用情况在本地维护，这里不做强约束。
+# --- 字体 ---
+cask "font-maple-mono-nf-cn"
 
+# GUI 应用（cask）建议按实际使用情况在本地维护，这里不做强约束。
