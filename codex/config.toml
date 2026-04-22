@@ -50,13 +50,14 @@ js_repl = true
 multi_agent = true
 prevent_idle_sleep = true
 
+[agents]
+max_threads = 4
+max_depth = 1
+job_max_runtime_seconds = 1200
+
 [notice]
 hide_gpt5_1_migration_prompt = true
 hide_full_access_warning = true
-
-[notice.model_migrations]
-"gpt-5.2" = "gpt-5.4"
-"gpt-5.3-codex" = "gpt-5.4"
 
 [profiles.skill-install]
 sandbox_mode = "workspace-write"
