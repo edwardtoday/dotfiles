@@ -25,6 +25,10 @@
 - **关键理由透明：** 说明关键判断依据、方案权衡和证据，不要求展开私有思维链。
 - **系统性思维：** 从第一性原理和系统影响评估问题，优先修复根因，避免制造技术债。
 - **咨询式范围界定：** 涉及技术栈或架构选型时，先参考 `~/.AGENTS.d/tech-guides-index.md`，再结合用户约束给建议。
+- **Skill 命名空间优先：** 当同一环境安装多套 skill 体系时，始终使用带前缀或命名空间的技能名，禁止依赖裸 skill 名称、模糊匹配或默认短名。
+- **Skill 职责边界：** `gstack` 默认负责规划、决策、评审、设计方向、风险控制与安全审查，典型包括 `/gstack-office-hours`、`/gstack-plan-ceo-review`、`/gstack-plan-eng-review`、`/gstack-autoplan`、`/gstack-design-consultation`、`/gstack-design-review`、`/gstack-design-shotgun`、`/gstack-design-html`、`/gstack-cso`、`/gstack-careful` 等；`superpowers` 默认负责实现、并行执行、验证与分支收尾，典型包括 `superpowers:test-driven-development`、`superpowers:executing-plans`、`superpowers:subagent-driven-development`、`superpowers:dispatching-parallel-agents`、`superpowers:verification-before-completion`、`superpowers:finishing-a-development-branch`、`superpowers:using-git-worktrees` 等。
+- **先规划，后执行：** 同时涉及方案与落地时，默认先由 `gstack` 产出或修订计划、评审和决策，再由 `superpowers` 执行；除非用户明确点名，否则不要让 `gstack` 接管执行型流程，也不要让 `superpowers` 覆盖规划或评审型流程。
+- **Skill 冲突处理：** 若某套 skill 存在主动路由、自动建议、默认接管或注入路由规则的行为，优先保持上述职责边界；必要时先关闭冲突侧的自动路由，再按命名空间显式调用。
 - **持续改进：** 若发现流程、规则或模板可优化，任务结束时给出简洁的改进建议。
 
 ## 3. 轻量工作流
@@ -33,6 +37,9 @@
 - **PRAR 简版：** 对非 trivial 任务，按“理解 → 计划 → 实现 → 验证”推进。
 - **先分析再动手：** 修改文件前先确认目标、范围、风险和完成标准。
 - **计划可见：** 多步骤任务维护可见计划；长任务按阶段汇报进度。
+- **计划交接显式化：** 需要从规划阶段切换到执行阶段时，默认在计划或任务说明开头明确 `Planner`、`Executor` 与推荐执行 skill，避免后续会话误用另一套 skill。
+- **长任务默认脱离会话：** 对耗时 SSH、长时间构建、远程同步、多 GB 传输或其他可能跨终端/跨地点继续执行的任务，默认优先使用 `tmux`（控制机或远端）承载；需要在两个远端主机间传大文件时，优先做远端直传，不让本机会话充当数据中继；启动后应明确返回 `tmux` session 名称、查看命令和恢复方式。
+- **OCR 服务优先：** 处理扫描 PDF、票据或文档提取任务时，优先考虑局域网内 `y9000` 上的 PDF OCR 服务；默认可走 `pp_structurev3`，调用方既可以只取 Markdown 文本结果，也可以取包含附件资源的完整 `bundle`。
 - **连续执行规则：** 用户明确授权连续执行时可持续推进；遇到高风险、权限边界、信息不足或目标变化时立即暂停。
 - **追踪优先：** 解释代码库行为时，必须从用户可见入口追踪到实际执行点，并明确区分事实与推断。
 
