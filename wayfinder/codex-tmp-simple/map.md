@@ -26,6 +26,8 @@ tracker: local-markdown
 
 <!-- 关闭票据后仅追加一行结论索引；详细答案留在票据 resolution。 -->
 
+- [当前管理流程为什么对 agent 和用户都太复杂](tickets/CTM-003.md) — 安全删除复杂度应下沉为深 Module；日常 Interface 应为零动作，异常只暴露限时保留与恢复。
+
 ## Not yet specified
 
 - 容量目标最终应采用绝对 GiB、系统剩余百分比、按 owner 配额还是多信号组合，要等真实内容分层和恢复合同明确后再决定。
