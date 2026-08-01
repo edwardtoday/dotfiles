@@ -1,7 +1,7 @@
 ---
 id: CTM-MAP
 title: Codex 临时工作区怎样做到低操作且容量有界
-status: open
+status: closed
 labels:
   - wayfinder:map
 tracker: local-markdown
@@ -26,14 +26,17 @@ tracker: local-markdown
 
 <!-- 关闭票据后仅追加一行结论索引；详细答案留在票据 resolution。 -->
 
+- [Codex 官方恢复能力已经负责哪些状态](tickets/CTM-001.md) — 官方能力接管已持久化会话与 Git 恢复路径，tmp 只保留经验证无替代来源的非 Git 检查点。
+- [当前 tmp 内容中真正不可替代的是什么](tickets/CTM-002.md) — 真正不可替代的仅是未锚定状态、小型检查点与活跃工作集，其余内容应路由或重建。
 - [当前管理流程为什么对 agent 和用户都太复杂](tickets/CTM-003.md) — 安全删除复杂度应下沉为深 Module；日常 Interface 应为零动作，异常只暴露限时保留与恢复。
+- [Git 仓库、构建输出和工具链应分别落在哪里](tickets/CTM-004.md) — Git、缓存、构建输出、工具链与证据各归唯一权威落点，tmp 只容纳极少数降级 clone 和唯一检查点。
+- [最小生命周期和用户操作面应该是什么](tickets/CTM-005.md) — 采用事件驱动 reconcile；日常零操作，非活跃保留量有硬边界，活跃与阻塞字节必须完全归因。
+- [现有 codex-tmp 如何无损迁移到最小实现](tickets/CTM-006.md) — 先资产路由，再双读、new-only、小批 legacy 和唯一 writer，旧状态只在恢复与回滚门槛通过后退役。
+- [怎样证明新方案简单且不会再次失控](tickets/CTM-007.md) — 用零人工动作、真实回收时延、容量、恢复、并发、回滚和独立 verifier 的连续观察窗作为替换门禁。
 
 ## Not yet specified
 
-- 容量目标最终应采用绝对 GiB、系统剩余百分比、按 owner 配额还是多信号组合，要等真实内容分层和恢复合同明确后再决定。
-- 后台触发应由 hook、LaunchAgent、Codex automation 还是组合承担，要等最小状态机确定后再精确成票。
-- 用户可见状态应进入 CLI、Codex task 更新还是系统通知，要等最小操作面和异常分类确定后再精确成票。
-- 现有数百个 legacy unmanaged 目录的迁移批次和期限，要等分层规则可以自动判定后再展开。
+无。容量合同、后台 Adapter、用户 Interface 和 legacy 迁移门槛均已在决策票据中明确。
 
 ## Out of scope
 
