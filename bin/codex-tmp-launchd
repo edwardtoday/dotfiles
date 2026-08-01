@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+state_dir="${CODEX_TMP_STATE:-$HOME/.local/state/codex-tmp}"
+mkdir -p "$state_dir"
+chmod 700 "$state_dir"
+
+exec "$HOME/.bin/codex-tmp" maintenance --quiet >>"$state_dir/launchd.log" 2>&1

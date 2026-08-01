@@ -1,0 +1,4403 @@
+#!/usr/bin/env python3
+"""Lifecycle manager for persistent Codex task workspaces."""
+
+from __future__ import annotations
+
+import argparse
+from contextlib import contextmanager
+import datetime as dt
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import secrets
+import shutil
+import stat
+import subprocess
+import sys
+import time
+from typing import Any, Callable, Iterable, Iterator
+
+
+MANIFEST_NAME = ".codex-tmp-task.json"
+SCHEMA_VERSION = 1
+UTC = dt.timezone.utc
+GIB = 1024**3
+PRESSURE_LEVELS = {"healthy": 0, "soft": 1, "hard": 2, "emergency": 3}
+
+
+def utc_now() -> dt.datetime:
+    return dt.datetime.now(UTC)
+
+
+def iso(value: dt.datetime | None = None) -> str:
+    return (value or utc_now()).isoformat(timespec="seconds")
+
+
+def parse_time(value: str | None) -> dt.datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+class LifecycleError(RuntimeError):
+    """Expected CLI failure with a user-facing message."""
+
+
+class Paths:
+    def __init__(self) -> None:
+        home = Path.home()
+        codex_home = Path(os.environ.get("CODEX_HOME", home / ".codex")).expanduser()
+        self.root = Path(os.environ.get("CODEX_TMP_ROOT", codex_home / "tmp")).expanduser()
+        self.state = Path(
+            os.environ.get("CODEX_TMP_STATE", home / ".local/state/codex-tmp")
+        ).expanduser()
+        self.quarantine = Path(
+            os.environ.get(
+                "CODEX_TMP_QUARANTINE", home / ".local/share/codex-tmp/quarantine"
+            )
+        ).expanduser()
+        self.recovery = Path(
+            os.environ.get(
+                "CODEX_TMP_RECOVERY", home / ".local/share/codex-tmp/checkpoints"
+            )
+        ).expanduser()
+        self.config = Path(
+            os.environ.get("CODEX_TMP_CONFIG", codex_home / "tmp-lifecycle.json")
+        ).expanduser()
+
+    def prepare(self) -> None:
+        for path in (self.root, self.state, self.quarantine, self.recovery):
+            path.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(self.state, 0o700)
+        os.chmod(self.quarantine, 0o700)
+        os.chmod(self.recovery, 0o700)
+
+
+DEFAULT_CONFIG: dict[str, Any] = {
+    "lifecycle_mode": "shadow",
+    "active_lease_hours": 1,
+    "hold_max_days": 30,
+    "v2_max_reconcile_per_run": 4,
+    "complete_grace_hours": 72,
+    "session_stale_hours": 168,
+    "compact_grace_hours": 1,
+    "quarantine_days": 14,
+    "purge_pending_hours": 24,
+    "sweep_interval_hours": 6,
+    "max_quarantine_per_run": 2,
+    "max_compact_per_run": 1,
+    "max_purge_per_run": 2,
+    "auto_adopt_after": None,
+    "auto_adopt_min_age_seconds": 30,
+    "orphan_active_hours": 24,
+    "system_soft_free_gib": 120,
+    "system_hard_free_gib": 90,
+    "system_emergency_free_gib": 55,
+    "tmp_soft_gib": 40,
+    "tmp_hard_gib": 60,
+    "tmp_emergency_gib": 80,
+    "default_budget_gib": 2,
+    "large_budget_gib": 8,
+    "exceptional_budget_gib": 16,
+    "checkpoint_limit_gib": 0.5,
+    "capacity_cache_max_age_seconds": 900,
+    "capacity_measure_timeout_seconds": 30,
+    "recovery_store_quota_gib": 20,
+    "recovery_gc_days": 7,
+    "max_recovery_gc_per_run": 2,
+    "max_output_cleanup_per_run": 2,
+}
+
+LIFECYCLE_MODES = {"shadow", "v2-new"}
+LIFECYCLE_OWNERS = {"legacy", "v2"}
+
+
+def load_json(path: Path, default: Any) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return default
+    except (json.JSONDecodeError, OSError) as exc:
+        raise LifecycleError(f"cannot read {path}: {exc}") from exc
+
+
+def atomic_json(path: Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    payload = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    with temporary.open("w", encoding="utf-8") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, path)
+    fsync_directory(path.parent)
+
+
+def fsync_directory(path: Path) -> None:
+    directory = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def load_config(paths: Paths) -> dict[str, Any]:
+    configured = load_json(paths.config, {})
+    if not isinstance(configured, dict):
+        raise LifecycleError(f"{paths.config} must contain a JSON object")
+    merged = dict(DEFAULT_CONFIG)
+    merged.update(configured)
+    if merged["lifecycle_mode"] not in LIFECYCLE_MODES:
+        raise LifecycleError(
+            f"lifecycle_mode must be one of: {', '.join(sorted(LIFECYCLE_MODES))}"
+        )
+    return merged
+
+
+def gibibytes(value: Any) -> int:
+    return int(float(value) * GIB)
+
+
+def pressure_level_for_free(free_bytes: int, config: dict[str, Any]) -> str:
+    if free_bytes < gibibytes(config["system_emergency_free_gib"]):
+        return "emergency"
+    if free_bytes < gibibytes(config["system_hard_free_gib"]):
+        return "hard"
+    if free_bytes < gibibytes(config["system_soft_free_gib"]):
+        return "soft"
+    return "healthy"
+
+
+def pressure_level_for_tmp(tmp_bytes: int | None, config: dict[str, Any]) -> str:
+    if tmp_bytes is None:
+        return "healthy"
+    if tmp_bytes > gibibytes(config["tmp_emergency_gib"]):
+        return "emergency"
+    if tmp_bytes > gibibytes(config["tmp_hard_gib"]):
+        return "hard"
+    if tmp_bytes > gibibytes(config["tmp_soft_gib"]):
+        return "soft"
+    return "healthy"
+
+
+def higher_pressure(first: str, second: str) -> str:
+    return first if PRESSURE_LEVELS[first] >= PRESSURE_LEVELS[second] else second
+
+
+def load_capacity_cache(paths: Paths, config: dict[str, Any]) -> dict[str, Any]:
+    value = load_json(paths.state / "capacity.json", {})
+    if not isinstance(value, dict):
+        return {}
+    measured_at = parse_time(value.get("measured_at"))
+    maximum_age = dt.timedelta(seconds=float(config["capacity_cache_max_age_seconds"]))
+    if measured_at is None or utc_now() - measured_at > maximum_age:
+        return {}
+    return value
+
+
+def capacity_snapshot(
+    paths: Paths, config: dict[str, Any], *, refresh_allocated: bool = False
+) -> dict[str, Any]:
+    usage = shutil.disk_usage(paths.root)
+    measurement_errors: list[str] = []
+    try:
+        cached = load_capacity_cache(paths, config)
+    except LifecycleError as exc:
+        cached = {}
+        measurement_errors.append(f"capacity cache unavailable: {exc}")
+    try:
+        raw_cached = load_json(paths.state / "capacity.json", {})
+    except LifecycleError as exc:
+        raw_cached = {}
+        error = f"capacity cache unavailable: {exc}"
+        if error not in measurement_errors:
+            measurement_errors.append(error)
+    if not isinstance(raw_cached, dict):
+        raw_cached = {}
+    if refresh_allocated:
+        timeout = float(config["capacity_measure_timeout_seconds"])
+        tmp_bytes, tmp_error = bounded_allocated_bytes(paths.root, timeout)
+        recovery_bytes, recovery_error = bounded_allocated_bytes(paths.recovery, timeout)
+        if tmp_error:
+            measurement_errors.append(tmp_error)
+            tmp_bytes = raw_cached.get("tmp_allocated_bytes")
+        if recovery_error:
+            measurement_errors.append(recovery_error)
+            recovery_bytes = raw_cached.get("recovery_store_allocated_bytes")
+    else:
+        tmp_bytes = cached.get("tmp_allocated_bytes")
+        recovery_bytes = cached.get("recovery_store_allocated_bytes")
+    system_level = pressure_level_for_free(usage.free, config)
+    tmp_level = pressure_level_for_tmp(int(tmp_bytes) if tmp_bytes is not None else None, config)
+    result = {
+        "measured_at": iso(),
+        "filesystem_total_bytes": usage.total,
+        "filesystem_used_bytes": usage.used,
+        "filesystem_free_bytes": usage.free,
+        "tmp_allocated_bytes": int(tmp_bytes) if tmp_bytes is not None else None,
+        "recovery_store_allocated_bytes": (
+            int(recovery_bytes) if recovery_bytes is not None else None
+        ),
+        "system_pressure": system_level,
+        "tmp_pressure": tmp_level,
+        "pressure": higher_pressure(system_level, tmp_level),
+        "allocated_stale": bool(measurement_errors),
+        "allocated_errors": measurement_errors,
+    }
+    if refresh_allocated:
+        atomic_json(paths.state / "capacity.json", result)
+    return result
+
+
+def task_budget_bytes(manifest: dict[str, Any]) -> int:
+    budget = manifest.get("budget")
+    return int(budget.get("expected_peak_bytes", 2 * GIB)) if isinstance(budget, dict) else 2 * GIB
+
+
+def reservation_snapshot(paths: Paths) -> dict[str, Any]:
+    entries: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    total = 0
+    for task in iter_tasks(paths):
+        try:
+            manifest = load_manifest(task)
+        except (LifecycleError, OSError, TypeError, ValueError) as exc:
+            errors.append({"task": task.name, "reason": str(exc)})
+            continue
+        if not manifest or manifest.get("status") != "active":
+            continue
+        try:
+            reserved = task_budget_bytes(manifest)
+        except (TypeError, ValueError) as exc:
+            errors.append({"task": task.name, "reason": f"invalid budget: {exc}"})
+            continue
+        total += reserved
+        entries.append({"task": task.name, "reserved_bytes": reserved})
+    return {"reserved_bytes": total, "tasks": entries, "errors": errors}
+
+
+def apply_budget(
+    manifest: dict[str, Any], config: dict[str, Any], budget_class: str, expected_peak_gib: float | None
+) -> None:
+    key = f"{budget_class}_budget_gib"
+    if key not in config:
+        raise LifecycleError(f"unknown budget class: {budget_class}")
+    configured = float(config[key])
+    requested = configured if expected_peak_gib is None else float(expected_peak_gib)
+    if requested <= 0:
+        raise LifecycleError("expected peak must be greater than zero")
+    manifest["budget"] = {
+        "class": budget_class,
+        "expected_peak_bytes": gibibytes(requested),
+        "advisory_limit_bytes": gibibytes(configured),
+        "checkpoint_limit_bytes": gibibytes(config["checkpoint_limit_gib"]),
+        "enforcement": "advisory",
+    }
+
+
+def admission_warnings(
+    paths: Paths, config: dict[str, Any], budget_class: str, requested_bytes: int
+) -> tuple[list[str], dict[str, Any], dict[str, Any]]:
+    warnings: list[str] = []
+    advisory_limit = gibibytes(config[f"{budget_class}_budget_gib"])
+    if requested_bytes > advisory_limit:
+        warnings.append(
+            f"expected peak exceeds the {budget_class} advisory planning level; creation continues"
+        )
+    try:
+        capacity = capacity_snapshot(paths, config)
+    except (LifecycleError, OSError, TypeError, ValueError) as exc:
+        warnings.append(f"capacity signal unavailable: {exc}")
+        capacity = {
+            "measured_at": iso(),
+            "filesystem_total_bytes": None,
+            "filesystem_used_bytes": None,
+            "filesystem_free_bytes": None,
+            "tmp_allocated_bytes": None,
+            "recovery_store_allocated_bytes": None,
+            "system_pressure": "unknown",
+            "tmp_pressure": "unknown",
+            "pressure": "unknown",
+        }
+    for error in capacity.get("allocated_errors", []):
+        warnings.append(f"capacity signal unavailable: {error}")
+    try:
+        reservations = reservation_snapshot(paths)
+    except (LifecycleError, OSError, TypeError, ValueError) as exc:
+        warnings.append(f"reservation signal unavailable: {exc}")
+        reservations = {"reserved_bytes": 0, "tasks": [], "errors": []}
+    for error in reservations.get("errors", []):
+        warnings.append(
+            f"reservation signal incomplete for {error['task']}: {error['reason']}"
+        )
+    if capacity["pressure"] == "emergency":
+        warnings.append("disk pressure is emergency")
+    if capacity["pressure"] == "emergency" and budget_class in {"large", "exceptional"}:
+        warnings.append(
+            f"disk pressure is emergency; {budget_class} tasks were previously paused"
+        )
+    emergency_floor = gibibytes(config["system_emergency_free_gib"])
+    uncommitted = max(0, int(reservations["reserved_bytes"]))
+    free_bytes = capacity.get("filesystem_free_bytes")
+    projected_free = (
+        int(free_bytes) - uncommitted - requested_bytes if free_bytes is not None else None
+    )
+    if projected_free is not None and projected_free < emergency_floor:
+        warnings.append(
+            "planning reservations project free space below the emergency floor"
+        )
+    return warnings, capacity, reservations
+
+
+@contextmanager
+def lifecycle_lock(paths: Paths, blocking: bool = True) -> Iterator[bool]:
+    lock_path = paths.state / "lifecycle.lock"
+    lock_path.touch(mode=0o600, exist_ok=True)
+    with lock_path.open("r+", encoding="utf-8") as lock:
+        operation = fcntl.LOCK_EX if blocking else fcntl.LOCK_EX | fcntl.LOCK_NB
+        try:
+            fcntl.flock(lock, operation)
+        except BlockingIOError:
+            yield False
+            return
+        yield True
+
+
+@contextmanager
+def hook_queue_lock(paths: Paths) -> Iterator[None]:
+    lock_path = paths.state / "hook-queue.lock"
+    lock_path.touch(mode=0o600, exist_ok=True)
+    with lock_path.open("r+", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+@contextmanager
+def hook_drain_lock(paths: Paths) -> Iterator[None]:
+    lock_path = paths.state / "hook-drain.lock"
+    lock_path.touch(mode=0o600, exist_ok=True)
+    with lock_path.open("r+", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+@contextmanager
+def dispatcher_lock(paths: Paths) -> Iterator[bool]:
+    lock_path = paths.state / "dispatcher.lock"
+    lock_path.touch(mode=0o600, exist_ok=True)
+    with lock_path.open("r+", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        yield True
+
+
+@contextmanager
+def hook_ingress_fence(paths: Paths) -> Iterator[bool]:
+    """Linearize final deletion against queued or concurrently draining session hooks."""
+    with hook_drain_lock(paths):
+        with hook_queue_lock(paths):
+            pending = paths.state / "pending-hooks"
+            pending.mkdir(parents=True, exist_ok=True, mode=0o700)
+            busy = any(pending.glob("*.json")) or any(
+                paths.state.glob("pending-hooks-draining-*")
+            )
+            yield not busy
+
+
+@contextmanager
+def task_lock(paths: Paths, task_name: str, blocking: bool = True) -> Iterator[bool]:
+    locks = paths.state / "task-locks"
+    locks.mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock_name = hashlib.sha256(task_name.encode("utf-8")).hexdigest() + ".lock"
+    lock_path = locks / lock_name
+    lock_path.touch(mode=0o600, exist_ok=True)
+    with lock_path.open("r+", encoding="utf-8") as lock:
+        operation = fcntl.LOCK_EX if blocking else fcntl.LOCK_EX | fcntl.LOCK_NB
+        try:
+            fcntl.flock(lock, operation)
+        except BlockingIOError:
+            yield False
+            return
+        yield True
+
+
+@contextmanager
+def ownership_lock(paths: Paths) -> Iterator[None]:
+    """Serialize stable lifecycle owner and generation claims."""
+    lock_path = paths.state / "ownership.lock"
+    lock_path.touch(mode=0o600, exist_ok=True)
+    with lock_path.open("r+", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def ownership_record_path(paths: Paths, task_instance_id: str) -> Path:
+    return paths.state / "ownership" / f"{task_instance_id}.json"
+
+
+def ownership_record(task: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+    task_stat = task.stat()
+    task_instance_id = manifest.get("task_instance_id")
+    generation = manifest.get("lifecycle_generation", 1)
+    if not isinstance(task_instance_id, str) or not task_instance_id:
+        raise LifecycleError(f"task has no stable instance id: {task}")
+    if not isinstance(generation, int) or generation < 1:
+        raise LifecycleError(f"task has invalid lifecycle generation: {task}")
+    return {
+        "schema": 1,
+        "name": str(manifest.get("name", task.name)),
+        "task_instance_id": task_instance_id,
+        "device": task_stat.st_dev,
+        "inode": task_stat.st_ino,
+        "lifecycle_owner": lifecycle_owner(manifest),
+        "generation": generation,
+        "updated_at": iso(),
+    }
+
+
+def write_ownership_record(paths: Paths, task: Path, manifest: dict[str, Any]) -> None:
+    task_instance_id = str(manifest.get("task_instance_id", ""))
+    if not task_instance_id:
+        raise LifecycleError(f"task has no stable instance id: {task}")
+    atomic_json(ownership_record_path(paths, task_instance_id), ownership_record(task, manifest))
+
+
+def require_writer(
+    paths: Paths, task: Path, manifest: dict[str, Any], expected_owner: str
+) -> dict[str, Any]:
+    if expected_owner not in LIFECYCLE_OWNERS:
+        raise LifecycleError(f"invalid expected lifecycle owner: {expected_owner}")
+    with ownership_lock(paths):
+        task_instance_id = str(manifest.get("task_instance_id", ""))
+        record = load_json(ownership_record_path(paths, task_instance_id), None)
+        expected = ownership_record(task, manifest)
+        if not isinstance(record, dict):
+            raise LifecycleError(f"missing lifecycle ownership record: {task.name}")
+        identity_fields = (
+            "name",
+            "task_instance_id",
+            "device",
+            "inode",
+            "lifecycle_owner",
+            "generation",
+        )
+        if any(record.get(field) != expected.get(field) for field in identity_fields):
+            raise LifecycleError(f"stale or conflicting lifecycle ownership: {task.name}")
+        if record.get("lifecycle_owner") != expected_owner:
+            raise LifecycleError(
+                f"{expected_owner} writer cannot mutate {record.get('lifecycle_owner')} task: {task.name}"
+            )
+        return record
+
+
+def backfill_ownership_records(paths: Paths) -> dict[str, list[dict[str, str]]]:
+    created: list[dict[str, str]] = []
+    blocked: list[dict[str, str]] = []
+    locations = [*iter_tasks(paths)]
+    locations.extend(
+        entry
+        for entry in paths.quarantine.iterdir()
+        if entry.is_dir() and not entry.is_symlink()
+    )
+    for task in locations:
+        try:
+            initial_manifest = load_manifest(task)
+        except (LifecycleError, OSError, TypeError, ValueError) as exc:
+            blocked.append({"task": task.name, "reason": str(exc)})
+            continue
+        lock_name = str((initial_manifest or {}).get("name", task.name))
+        with task_lock(paths, lock_name, blocking=False) as acquired:
+            if not acquired:
+                blocked.append({"task": lock_name, "reason": "task is busy"})
+                continue
+            try:
+                manifest = load_manifest(task)
+                if manifest is None:
+                    continue
+                manifest_changed = False
+                if not manifest.get("task_instance_id"):
+                    ensure_task_instance_id(manifest)
+                    manifest_changed = True
+                if "lifecycle_owner" not in manifest:
+                    manifest["lifecycle_owner"] = "legacy"
+                    manifest_changed = True
+                if "lifecycle_generation" not in manifest:
+                    manifest["lifecycle_generation"] = 1
+                    manifest_changed = True
+                if manifest_changed:
+                    manifest["ownership_backfilled_at"] = iso()
+                    write_manifest(task, manifest)
+                with ownership_lock(paths):
+                    record_path = ownership_record_path(
+                        paths, str(manifest.get("task_instance_id", ""))
+                    )
+                    if record_path.exists():
+                        expected = ownership_record(task, manifest)
+                        record = load_json(record_path, None)
+                        fields = (
+                            "name",
+                            "task_instance_id",
+                            "device",
+                            "inode",
+                            "lifecycle_owner",
+                            "generation",
+                        )
+                        if not isinstance(record, dict) or any(
+                            record.get(field) != expected.get(field) for field in fields
+                        ):
+                            raise LifecycleError("ownership record conflicts with task identity")
+                    else:
+                        write_ownership_record(paths, task, manifest)
+                        created.append({"task": lock_name, "owner": lifecycle_owner(manifest)})
+            except (LifecycleError, OSError, TypeError, ValueError) as exc:
+                blocked.append({"task": lock_name, "reason": str(exc)})
+    return {"created": created, "blocked": blocked}
+
+
+@contextmanager
+def recovery_lock(paths: Paths) -> Iterator[None]:
+    lock_path = paths.state / "recovery-store.lock"
+    lock_path.touch(mode=0o600, exist_ok=True)
+    with lock_path.open("r+", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+@contextmanager
+def manifest_location_lock(paths: Paths) -> Iterator[None]:
+    """Serialize manifest enumeration with root/quarantine moves."""
+    lock_path = paths.state / "manifest-location.lock"
+    lock_path.touch(mode=0o600, exist_ok=True)
+    with lock_path.open("r+", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def manifest_path(task: Path) -> Path:
+    return task / MANIFEST_NAME
+
+
+def load_manifest(task: Path) -> dict[str, Any] | None:
+    value = load_json(manifest_path(task), None)
+    if value is None:
+        return None
+    if not isinstance(value, dict) or value.get("schema") != SCHEMA_VERSION:
+        raise LifecycleError(f"invalid task manifest: {manifest_path(task)}")
+    return value
+
+
+def exclude_manifest_from_root_repository(task: Path) -> None:
+    git_dir = task / ".git"
+    if not git_dir.is_dir():
+        return
+    exclude = git_dir / "info" / "exclude"
+    try:
+        existing = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+        if MANIFEST_NAME in {line.strip() for line in existing.splitlines()}:
+            return
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        prefix = "" if not existing or existing.endswith("\n") else "\n"
+        with exclude.open("a", encoding="utf-8") as handle:
+            handle.write(f"{prefix}{MANIFEST_NAME}\n")
+    except OSError as exc:
+        raise LifecycleError(f"cannot exclude lifecycle manifest in {task}: {exc}") from exc
+
+
+def write_manifest(task: Path, manifest: dict[str, Any]) -> None:
+    exclude_manifest_from_root_repository(task)
+    manifest["updated_at"] = iso()
+    atomic_json(manifest_path(task), manifest)
+
+
+def configured_new_owner(config: dict[str, Any]) -> str:
+    return "v2" if config["lifecycle_mode"] == "v2-new" else "legacy"
+
+
+def lifecycle_owner(manifest: dict[str, Any]) -> str:
+    owner = manifest.get("lifecycle_owner", "legacy")
+    if owner not in LIFECYCLE_OWNERS:
+        raise LifecycleError(f"invalid lifecycle owner: {owner}")
+    return str(owner)
+
+
+def refresh_lease(
+    manifest: dict[str, Any], config: dict[str, Any], session_id: str | None = None
+) -> None:
+    if lifecycle_owner(manifest) != "v2":
+        return
+    hours = float(config["active_lease_hours"])
+    if hours <= 0:
+        raise LifecycleError("active_lease_hours must be greater than zero")
+    now = utc_now()
+    manifest["last_observed_at"] = iso(now)
+    expires_at = iso(now + dt.timedelta(hours=hours))
+    if session_id:
+        leases = manifest.setdefault("session_leases", {})
+        if not isinstance(leases, dict):
+            raise LifecycleError("invalid session lease map")
+        leases[session_id] = expires_at
+    else:
+        manifest["lease_expires_at"] = expires_at
+
+
+def apply_event_lease(
+    manifest: dict[str, Any], config: dict[str, Any], event_name: str, session_id: str
+) -> None:
+    if lifecycle_owner(manifest) != "v2":
+        return
+    if event_name == "SessionEnd":
+        now = utc_now()
+        manifest["last_observed_at"] = iso(now)
+        leases = manifest.setdefault("session_leases", {})
+        if not isinstance(leases, dict):
+            raise LifecycleError("invalid session lease map")
+        if session_id:
+            leases[session_id] = iso(now)
+        else:
+            manifest["lease_expires_at"] = iso(now)
+        return
+    refresh_lease(manifest, config, session_id or None)
+
+
+def effective_lease_expiry(manifest: dict[str, Any]) -> dt.datetime | None:
+    leases = manifest.get("session_leases")
+    if isinstance(leases, dict) and leases:
+        parsed = [parse_time(str(value)) for value in leases.values()]
+        valid = [value for value in parsed if value is not None]
+        return max(valid) if valid else None
+    return parse_time(manifest.get("lease_expires_at"))
+
+
+def new_manifest(
+    task: Path,
+    session_id: str | None = None,
+    *,
+    owner: str = "legacy",
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if owner not in LIFECYCLE_OWNERS:
+        raise LifecycleError(f"invalid lifecycle owner: {owner}")
+    owners = [session_id] if session_id else []
+    manifest = {
+        "schema": SCHEMA_VERSION,
+        "name": task.name,
+        "task_instance_id": secrets.token_hex(16),
+        "status": "active",
+        "created_at": iso(),
+        "updated_at": iso(),
+        "completed_at": None,
+        "owner_session_ids": owners,
+        "lifecycle_owner": owner,
+        "lifecycle_generation": 1,
+        "required_paths": [],
+        "fingerprint": None,
+        "budget": {
+            "class": "default",
+            "expected_peak_bytes": 2 * GIB,
+            "checkpoint_limit_bytes": GIB // 2,
+            "enforcement": "advisory",
+        },
+        "scratch": {
+            "protocol": "fenced",
+            "generation": 0,
+            "current_path": None,
+            "writers": {},
+        },
+        "recovery_note": "Task files may be required to resume the owning Codex session.",
+    }
+    if config is not None:
+        refresh_lease(manifest, config, session_id)
+    return manifest
+
+
+def ensure_task_instance_id(manifest: dict[str, Any]) -> str:
+    value = manifest.get("task_instance_id")
+    if value is None:
+        value = secrets.token_hex(16)
+        manifest["task_instance_id"] = value
+    if (
+        not isinstance(value, str)
+        or len(value) != 32
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise LifecycleError("invalid task instance id")
+    return value
+
+
+def effective_session_id(explicit: str | None) -> str | None:
+    value = explicit or os.environ.get("CODEX_THREAD_ID")
+    return value.strip() if value and value.strip() else None
+
+
+def resolve_task(paths: Paths, value: str) -> Path:
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        candidate = paths.root / candidate
+    if candidate.is_symlink():
+        raise LifecycleError(f"task must not be a symlink: {candidate}")
+    try:
+        resolved = candidate.resolve(strict=True)
+        root = paths.root.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise LifecycleError(f"task does not exist: {candidate}") from exc
+    if resolved.parent != root:
+        raise LifecycleError(f"task must be a direct child of {paths.root}: {resolved}")
+    if resolved.is_symlink() or not resolved.is_dir():
+        raise LifecycleError(f"task must be a real directory: {resolved}")
+    return resolved
+
+
+def task_for_cwd(paths: Paths, cwd: str) -> Path | None:
+    try:
+        root = paths.root.resolve(strict=True)
+        current = Path(cwd).expanduser().resolve(strict=True)
+        relative = current.relative_to(root)
+    except (FileNotFoundError, ValueError):
+        return None
+    if not relative.parts:
+        return None
+    task = root / relative.parts[0]
+    return task if task.is_dir() and not task.name.startswith(".") else None
+
+
+def iter_tasks(paths: Paths) -> Iterator[Path]:
+    try:
+        entries = sorted(paths.root.iterdir(), key=lambda item: item.name)
+    except FileNotFoundError:
+        return
+    for entry in entries:
+        if entry.name.startswith(".") or entry.is_symlink() or not entry.is_dir():
+            continue
+        yield entry
+
+
+def filesystem_created_at(task: Path) -> dt.datetime:
+    stat = task.stat()
+    timestamp = getattr(stat, "st_birthtime", stat.st_ctime)
+    return dt.datetime.fromtimestamp(timestamp, UTC)
+
+
+def adopt_unmanaged(
+    paths: Paths,
+    config: dict[str, Any],
+    session_id: str | None = None,
+    cwd: str | None = None,
+) -> list[dict[str, str]]:
+    cutoff = parse_time(config.get("auto_adopt_after"))
+    if cutoff is None:
+        return []
+    lock_path = paths.state / "adopt.lock"
+    lock_path.touch(mode=0o600, exist_ok=True)
+    with lock_path.open("r+", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return []
+        minimum_age = dt.timedelta(seconds=float(config["auto_adopt_min_age_seconds"]))
+        cwd_task = task_for_cwd(paths, cwd) if cwd else None
+        adopted: list[dict[str, str]] = []
+        now = utc_now()
+        for task in iter_tasks(paths):
+            with task_lock(paths, task.name, blocking=False) as acquired:
+                if not acquired:
+                    continue
+                with ownership_lock(paths):
+                    try:
+                        manifest = load_manifest(task)
+                        if manifest is not None:
+                            exclude_manifest_from_root_repository(task)
+                            continue
+                        created_at = filesystem_created_at(task)
+                        if created_at < cutoff or now - created_at < minimum_age:
+                            continue
+                        session_owner = None
+                        if session_id and cwd_task and cwd_task.resolve() == task.resolve():
+                            session_owner = session_id
+                        manifest = new_manifest(
+                            task,
+                            session_owner,
+                            owner=configured_new_owner(config),
+                            config=config,
+                        )
+                        apply_budget(manifest, config, "default", None)
+                        manifest["adoption_source"] = "automatic"
+                        manifest["adopted_at"] = iso()
+                        manifest["filesystem_created_at"] = iso(created_at)
+                        write_manifest(task, manifest)
+                        write_ownership_record(paths, task, manifest)
+                        append_history(
+                            paths, {"action": "adopt", "task": str(task), "status": "active"}
+                        )
+                        adopted.append({"task": str(task), "status": "active"})
+                    except (
+                        FileNotFoundError,
+                        LifecycleError,
+                        OSError,
+                        TypeError,
+                        ValueError,
+                    ):
+                        continue
+        return adopted
+
+
+def fingerprint(task: Path) -> dict[str, int | str]:
+    files = 0
+    bytes_total = 0
+    newest_ns = 0
+    digest = hashlib.sha256()
+
+    def add_record(record_type: bytes, path: Path, payload: bytes, stat: os.stat_result) -> None:
+        nonlocal files, bytes_total, newest_ns
+        relative = path.relative_to(task).as_posix().encode("utf-8", errors="surrogateescape")
+        digest.update(record_type)
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update(stat.st_size.to_bytes(8, "big"))
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+        files += 1
+        bytes_total += stat.st_size
+        newest_ns = max(newest_ns, stat.st_mtime_ns)
+
+    for base, dirs, names in os.walk(task, followlinks=False):
+        traversable: list[str] = []
+        for name in sorted(dirs):
+            path = Path(base) / name
+            if path.is_symlink():
+                try:
+                    add_record(b"L", path, os.fsencode(os.readlink(path)), path.lstat())
+                except OSError as exc:
+                    raise LifecycleError(f"cannot fingerprint {path}: {exc}") from exc
+            elif name not in {".git", "node_modules", "target", "scratch"}:
+                traversable.append(name)
+        dirs[:] = traversable
+        for name in sorted(names):
+            path = Path(base) / name
+            if path.name == MANIFEST_NAME:
+                continue
+            try:
+                if path.is_symlink():
+                    add_record(b"L", path, os.fsencode(os.readlink(path)), path.lstat())
+                    continue
+                stat = path.stat()
+                content_digest = hashlib.sha256()
+                with path.open("rb") as handle:
+                    while chunk := handle.read(1024 * 1024):
+                        content_digest.update(chunk)
+            except OSError as exc:
+                raise LifecycleError(f"cannot fingerprint {path}: {exc}") from exc
+            add_record(b"F", path, content_digest.digest(), stat)
+    return {
+        "files": files,
+        "bytes": bytes_total,
+        "newest_mtime_ns": newest_ns,
+        "sha256": digest.hexdigest(),
+    }
+
+
+def git_read_only_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    environment["GIT_OPTIONAL_LOCKS"] = "0"
+    return environment
+
+
+def git_remote_history_blockers(repository: Path) -> list[str]:
+    blockers: list[str] = []
+    remotes = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "config",
+            "--local",
+            "--get-regexp",
+            r"^remote\..*\.url$",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+        env=git_read_only_environment(),
+    )
+    if remotes.returncode not in {0, 1}:
+        return [f"cannot inspect Git remotes at {repository}"]
+    if remotes.returncode == 1 or not remotes.stdout.strip():
+        return [f"Git repository has no remote at {repository}"]
+    remote_names = subprocess.run(
+        ["git", "-C", str(repository), "remote"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+        env=git_read_only_environment(),
+    )
+    if remote_names.returncode != 0:
+        return [f"cannot inspect Git remote names at {repository}"]
+    advertised_commits: set[str] = set()
+    for remote_name in remote_names.stdout.splitlines():
+        try:
+            advertised = subprocess.run(
+                ["git", "-C", str(repository), "ls-remote", remote_name],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+                env=git_read_only_environment(),
+            )
+        except (OSError, subprocess.SubprocessError):
+            return [f"cannot verify live Git remotes at {repository}"]
+        if advertised.returncode != 0 or advertised.stderr.strip():
+            return [f"cannot verify live Git remotes at {repository}"]
+        for line in advertised.stdout.splitlines():
+            fields = line.split(None, 1)
+            if not fields:
+                continue
+            object_id = fields[0]
+            commit = subprocess.run(
+                ["git", "-C", str(repository), "cat-file", "-e", f"{object_id}^{{commit}}"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+                env=git_read_only_environment(),
+            )
+            if commit.returncode == 0:
+                advertised_commits.add(object_id)
+    if not advertised_commits:
+        return [f"Git remotes advertise no locally verifiable commits at {repository}"]
+    unique = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "rev-list",
+            "--all",
+            "--reflog",
+            "--not",
+            *sorted(advertised_commits),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+        env=git_read_only_environment(),
+    )
+    if unique.returncode != 0:
+        blockers.append(f"cannot inspect Git history at {repository}")
+    elif unique.stdout.strip():
+        blockers.append(f"local-only Git history at {repository}")
+    return blockers
+
+
+def git_blockers(task: Path) -> list[str]:
+    blockers: list[str] = []
+    repositories: list[tuple[Path, bool]] = []
+    for base, dirs, names in os.walk(task, followlinks=False):
+        current = Path(base)
+        if ".git" in names:
+            blockers.append(f"linked Git worktree at {current}")
+            dirs[:] = []
+        elif ".git" in dirs:
+            repositories.append((current, False))
+            dirs.remove(".git")
+        elif "HEAD" in names and {"objects", "refs"}.issubset(dirs):
+            try:
+                bare = subprocess.run(
+                    ["git", "-C", str(current), "rev-parse", "--is-bare-repository"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                    env=git_read_only_environment(),
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                blockers.append(f"cannot inspect bare Git repository at {current}: {exc}")
+                dirs[:] = []
+                continue
+            if bare.returncode == 0 and bare.stdout.strip() == "true":
+                repositories.append((current, True))
+                dirs[:] = []
+            elif bare.returncode != 0:
+                blockers.append(f"cannot inspect bare Git repository at {current}")
+                dirs[:] = []
+    for repository, is_bare in repositories:
+        if not is_bare:
+            result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repository),
+                    "status",
+                    "--porcelain",
+                    "--untracked-files=all",
+                    "--",
+                    ".",
+                    f":(exclude,top){MANIFEST_NAME}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+                env=git_read_only_environment(),
+            )
+            if result.returncode != 0:
+                blockers.append(f"cannot inspect Git repository at {repository}")
+            elif result.stdout.strip():
+                blockers.append(f"dirty Git repository at {repository}")
+                continue
+        blockers.extend(git_remote_history_blockers(repository))
+    return blockers
+
+
+def enclosing_git_blockers(task: Path) -> list[str]:
+    try:
+        top_level = subprocess.run(
+            ["git", "-C", str(task), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            env=git_read_only_environment(),
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return [f"cannot inspect enclosing Git repository for {task}: {exc}"]
+    if top_level.returncode != 0:
+        return []
+    repository = Path(top_level.stdout.strip()).resolve(strict=False)
+    if (repository / ".git").is_file():
+        return [f"linked Git worktree at {repository}"]
+    try:
+        manifest_relative = manifest_path(task).resolve(strict=False).relative_to(repository)
+    except ValueError:
+        return [f"enclosing Git repository does not contain task: {repository}"]
+    status_result = subprocess.run(
+        ["git", "-C", str(repository), "status", "--porcelain", "--untracked-files=all"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+        env=git_read_only_environment(),
+    )
+    if status_result.returncode != 0:
+        return [f"cannot inspect enclosing Git repository at {repository}"]
+    manifest_name = manifest_relative.as_posix()
+    dirty = [
+        line
+        for line in status_result.stdout.splitlines()
+        if line[3:].strip().strip('"') != manifest_name
+    ]
+    if dirty:
+        return [f"dirty enclosing Git repository at {repository}"]
+    return git_remote_history_blockers(repository)
+
+
+def process_blockers(task: Path) -> list[str]:
+    prefix = str(task.resolve())
+    blockers: list[str] = []
+    try:
+        ps = subprocess.run(
+            ["ps", "-axo", "pid=,command="],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return [f"process check failed: {exc}"]
+    for line in ps.stdout.splitlines():
+        fields = line.strip().split(None, 1)
+        try:
+            pid = int(fields[0])
+        except (IndexError, ValueError):
+            continue
+        command = fields[1] if len(fields) > 1 else ""
+        if pid != os.getpid() and prefix in command:
+            blockers.append(f"running process references task: {line.strip()[:160]}")
+            break
+    lsof = shutil.which("lsof")
+    if not lsof:
+        blockers.append("open-file check failed: lsof is unavailable")
+        return blockers
+    try:
+        result = subprocess.run(
+            [lsof, "-nP", "+D", prefix, "-Fn"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        if result.returncode not in {0, 1} or result.stderr.strip():
+            blockers.append(f"open-file check failed with exit code {result.returncode}")
+        elif any(line.startswith("n") and line[1:].startswith(prefix) for line in result.stdout.splitlines()):
+            blockers.append("a running process has an open file or cwd inside the task")
+    except (OSError, subprocess.SubprocessError) as exc:
+        blockers.append(f"open-file check failed: {exc}")
+    return blockers
+
+
+def filesystem_boundary_blockers(task: Path) -> list[str]:
+    blockers: list[str] = []
+    if os.path.ismount(task):
+        blockers.append(f"task root is a filesystem mount point: {task}")
+    task_device = task.stat().st_dev
+    for base, dirs, names in os.walk(task, topdown=True, followlinks=False):
+        traversable: list[str] = []
+        for name in dirs:
+            path = Path(base) / name
+            if path.is_symlink():
+                traversable.append(name)
+                continue
+            try:
+                crosses_boundary = path.stat().st_dev != task_device or os.path.ismount(path)
+            except OSError as exc:
+                blockers.append(f"cannot inspect filesystem boundary at {path}: {exc}")
+                continue
+            if crosses_boundary:
+                blockers.append(f"nested filesystem boundary at {path}")
+            else:
+                traversable.append(name)
+        dirs[:] = traversable
+        for name in names:
+            path = Path(base) / name
+            if path.is_symlink():
+                continue
+            try:
+                if path.stat().st_dev != task_device:
+                    blockers.append(f"nested filesystem boundary at {path}")
+            except OSError as exc:
+                blockers.append(f"cannot inspect filesystem boundary at {path}: {exc}")
+    return blockers
+
+
+def load_sessions(paths: Paths) -> dict[str, Any]:
+    value = load_json(paths.state / "sessions.json", {})
+    return value if isinstance(value, dict) else {}
+
+
+def preservation_blockers(
+    paths: Paths, config: dict[str, Any], task: Path, manifest: dict[str, Any]
+) -> list[str]:
+    blockers: list[str] = []
+    hold = active_hold(manifest)
+    if hold:
+        blockers.append(f"hold active until {hold['expires_at']}")
+    expected = manifest.get("fingerprint")
+    if expected != fingerprint(task):
+        blockers.append("task content changed after it was marked complete")
+    blockers.extend(recovery_path_blockers(paths, manifest.get("required_paths", [])))
+    compaction = manifest.get("compaction")
+    if (
+        isinstance(compaction, dict)
+        and compaction.get("status") == "compacted"
+        and not compaction.get("checkpoint_released_at")
+    ):
+        blockers.extend(
+            recovery_package_blockers(
+                paths,
+                compaction.get("recovery_package"),
+                manifest.get("task_instance_id"),
+            )
+        )
+    sessions = load_sessions(paths)
+    stale_after = dt.timedelta(hours=float(config["session_stale_hours"]))
+    for session_id in manifest.get("owner_session_ids", []):
+        seen = parse_time((sessions.get(session_id) or {}).get("last_seen"))
+        if seen and utc_now() - seen < stale_after:
+            blockers.append(f"owner session {session_id} is still within the resume window")
+    blockers.extend(filesystem_boundary_blockers(task))
+    blockers.extend(git_blockers(task))
+    blockers.extend(process_blockers(task))
+    return blockers
+
+
+def eligibility(
+    paths: Paths, config: dict[str, Any], task: Path, manifest: dict[str, Any]
+) -> list[str]:
+    if manifest.get("status") != "complete":
+        return [f"status is {manifest.get('status', 'unknown')}, not complete"]
+    blockers: list[str] = []
+    completed_at = parse_time(manifest.get("completed_at"))
+    if completed_at is None:
+        blockers.append("completed_at is missing or invalid")
+    else:
+        grace = dt.timedelta(hours=float(config["complete_grace_hours"]))
+        if utc_now() - completed_at < grace:
+            blockers.append(f"completion grace period is less than {config['complete_grace_hours']}h")
+    blockers.extend(preservation_blockers(paths, config, task, manifest))
+    return blockers
+
+
+def append_history(paths: Paths, action: dict[str, Any]) -> None:
+    history = paths.state / "history.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with history.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"at": iso(), **action}, ensure_ascii=False) + "\n")
+    os.chmod(history, 0o600)
+
+
+def command_create(
+    args: argparse.Namespace, paths: Paths, config: dict[str, Any]
+) -> dict[str, Any]:
+    if not args.name or args.name.startswith(".") or "/" in args.name:
+        raise LifecycleError("task name must be one path component")
+    task = paths.root / args.name
+    owner = configured_new_owner(config)
+    manifest = new_manifest(
+        task,
+        effective_session_id(args.session_id) if args.session_id else None,
+        owner=owner,
+        config=config,
+    )
+    apply_budget(manifest, config, args.budget_class, args.expected_peak_gib)
+    requested_bytes = task_budget_bytes(manifest)
+    with lifecycle_lock(paths) as state_acquired:
+        if not state_acquired:
+            raise LifecycleError("cannot acquire lifecycle state lock")
+        warnings, capacity, reservations = admission_warnings(
+            paths, config, args.budget_class, requested_bytes
+        )
+        with task_lock(paths, task.name) as acquired:
+            if not acquired:
+                raise LifecycleError(f"cannot acquire task lock: {task.name}")
+            with ownership_lock(paths):
+                try:
+                    task.mkdir(mode=0o700)
+                except FileExistsError as exc:
+                    raise LifecycleError(f"task already exists: {task}") from exc
+                for child in ("checkpoint", "evidence", "scratch"):
+                    (task / child).mkdir(mode=0o700)
+                write_manifest(task, manifest)
+                write_ownership_record(paths, task, manifest)
+    return {
+        "created": str(task),
+        "status": "active",
+        "lifecycle_owner": owner,
+        "lifecycle_generation": manifest["lifecycle_generation"],
+        "budget": manifest["budget"],
+        "pressure": capacity["pressure"],
+        "reserved_bytes_before": reservations["reserved_bytes"],
+        "admission_warnings": warnings,
+    }
+
+
+def command_mark(
+    args: argparse.Namespace, paths: Paths, config: dict[str, Any]
+) -> dict[str, Any]:
+    task = resolve_task(paths, args.task)
+    with task_lock(paths, task.name) as acquired:
+        if not acquired:
+            raise LifecycleError(f"cannot acquire task lock: {task.name}")
+        return mark_task(args, paths, config, task)
+
+
+def mark_task(
+    args: argparse.Namespace, paths: Paths, config: dict[str, Any], task: Path
+) -> dict[str, Any]:
+    session_id = effective_session_id(args.session_id) if args.session_id else None
+    if session_id is None:
+        cwd_task = task_for_cwd(paths, os.getcwd())
+        if cwd_task and cwd_task.resolve() == task.resolve():
+            session_id = effective_session_id(None)
+    manifest = load_manifest(task) or new_manifest(
+        task,
+        session_id,
+        owner=configured_new_owner(config),
+        config=config,
+    )
+    if not isinstance(manifest.get("budget"), dict):
+        manifest["budget"] = new_manifest(task)["budget"]
+    require_writer(paths, task, manifest, lifecycle_owner(manifest))
+    if session_id and session_id not in manifest["owner_session_ids"]:
+        manifest["owner_session_ids"].append(session_id)
+    refresh_lease(manifest, config, session_id)
+    if args.status == "complete" and scratch_state(manifest)["writers"]:
+        raise LifecycleError("release all scratch fencing tokens before completing the task")
+    manifest["status"] = args.status
+    manifest.pop("compaction", None)
+    if args.status == "complete":
+        manifest["completed_at"] = iso()
+        manifest["fingerprint"] = fingerprint(task)
+        manifest["required_paths"] = sorted(
+            {str(Path(value).expanduser().resolve()) for value in (args.depends_on or [])}
+        )
+        if args.note:
+            manifest["recovery_note"] = args.note
+    else:
+        manifest["completed_at"] = None
+        manifest["fingerprint"] = None
+    write_manifest(task, manifest)
+    append_history(paths, {"action": "mark", "task": str(task), "status": args.status})
+    return {"task": str(task), "status": args.status, "manifest": str(manifest_path(task))}
+
+
+def command_check(args: argparse.Namespace, paths: Paths, config: dict[str, Any]) -> dict[str, Any]:
+    task = resolve_task(paths, args.task)
+    manifest = load_manifest(task)
+    if manifest is None:
+        return {"task": str(task), "eligible": False, "blockers": ["unmanaged task"]}
+    blockers = eligibility(paths, config, task, manifest)
+    result = {"task": str(task), "eligible": not blockers, "blockers": blockers}
+    compaction = manifest.get("compaction")
+    if isinstance(compaction, dict):
+        result["compaction"] = {
+            "status": compaction.get("status"),
+            "not_before": compaction.get("not_before"),
+            "blockers": compaction_blockers(paths, task, manifest),
+        }
+    return result
+
+
+def command_refresh_fingerprint(args: argparse.Namespace, paths: Paths) -> dict[str, Any]:
+    task = resolve_task(paths, args.task)
+    with task_lock(paths, task.name) as acquired:
+        if not acquired:
+            raise LifecycleError(f"cannot acquire task lock: {task.name}")
+        manifest = load_manifest(task)
+        if not manifest or manifest.get("status") != "complete":
+            raise LifecycleError("only a completed managed task can refresh its fingerprint")
+        expected = manifest.get("fingerprint")
+        if not isinstance(expected, dict) or expected.get("sha256"):
+            raise LifecycleError("fingerprint refresh is only for legacy manifests without SHA-256")
+        actual = fingerprint(task)
+        identity_fields = ("files", "bytes", "newest_mtime_ns")
+        if any(expected.get(field) != actual.get(field) for field in identity_fields):
+            raise LifecycleError("legacy fingerprint identity fields do not match current content")
+        blockers = recovery_path_blockers(paths, manifest.get("required_paths", []))
+        blockers.extend(filesystem_boundary_blockers(task))
+        blockers.extend(git_blockers(task))
+        blockers.extend(process_blockers(task))
+        if blockers:
+            raise LifecycleError("cannot refresh legacy fingerprint: " + "; ".join(blockers))
+        ensure_task_instance_id(manifest)
+        manifest["fingerprint"] = actual
+        manifest["fingerprint_refreshed_at"] = iso()
+        write_manifest(task, manifest)
+        append_history(paths, {"action": "fingerprint-refresh", "task": str(task)})
+        return {"task": str(task), "fingerprint": actual, "refreshed": True}
+
+
+def path_is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def paths_overlap(first: Path, second: Path) -> bool:
+    return path_is_within(first, second) or path_is_within(second, first)
+
+
+def recovery_path_blockers(paths: Paths, raw_paths: Iterable[str]) -> list[str]:
+    blockers: list[str] = []
+    for raw_path in raw_paths:
+        recovery_path = Path(raw_path).expanduser()
+        if not recovery_path.exists():
+            blockers.append(f"required recovery path is missing: {raw_path}")
+        elif recovery_path.is_symlink():
+            blockers.append(f"required recovery path must not be a symlink: {raw_path}")
+        elif any(
+            paths_overlap(recovery_path, protected)
+            for protected in (paths.root, paths.state, paths.quarantine, paths.recovery)
+        ):
+            blockers.append(f"recovery path must not overlap lifecycle-managed storage: {raw_path}")
+        elif recovery_path.resolve() in {Path("/"), Path.home().resolve()}:
+            blockers.append(f"recovery path is too broad: {raw_path}")
+        else:
+            recovery_stat = recovery_path.lstat()
+            if not (stat.S_ISREG(recovery_stat.st_mode) or stat.S_ISDIR(recovery_stat.st_mode)):
+                blockers.append(f"required recovery path has unsupported type: {raw_path}")
+            elif not os.access(
+                recovery_path,
+                os.R_OK | (os.X_OK if stat.S_ISDIR(recovery_stat.st_mode) else 0),
+            ):
+                blockers.append(f"required recovery path is not readable: {raw_path}")
+    return blockers
+
+
+def allocated_bytes(path: Path) -> int:
+    total = path.lstat().st_blocks * 512
+    if path.is_symlink() or not path.is_dir():
+        return total
+    for base, dirs, names in os.walk(path, followlinks=False):
+        for name in [*dirs, *names]:
+            child = Path(base) / name
+            total += child.lstat().st_blocks * 512
+    return total
+
+
+def bounded_allocated_bytes(path: Path, timeout_seconds: float) -> tuple[int | None, str | None]:
+    try:
+        result = subprocess.run(
+            ["/usr/bin/du", "-sk", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, f"capacity measurement failed for {path}: {exc}"
+    if result.returncode != 0:
+        return None, f"capacity measurement failed for {path}: exit {result.returncode}"
+    fields = result.stdout.split(None, 1)
+    try:
+        return int(fields[0]) * 1024, None
+    except (IndexError, ValueError):
+        return None, f"capacity measurement returned invalid output for {path}"
+
+
+def validate_checkpoint_source(task: Path, source: Path) -> Path:
+    resolved = source.expanduser().resolve(strict=True)
+    task_root = task.resolve(strict=True)
+    try:
+        relative = resolved.relative_to(task_root)
+    except ValueError as exc:
+        raise LifecycleError(f"checkpoint source must be inside the task: {source}") from exc
+    if not relative.parts:
+        raise LifecycleError("checkpoint source must not be the whole task")
+    for base, dirs, names in os.walk(resolved, followlinks=False):
+        for name in [*dirs, *names]:
+            child = Path(base) / name
+            child_stat = child.lstat()
+            if stat.S_ISLNK(child_stat.st_mode):
+                raise LifecycleError(f"checkpoint source contains a symlink: {child}")
+            if not (stat.S_ISDIR(child_stat.st_mode) or stat.S_ISREG(child_stat.st_mode)):
+                raise LifecycleError(f"checkpoint source contains an unsupported file: {child}")
+    source_stat = resolved.lstat()
+    if not (stat.S_ISDIR(source_stat.st_mode) or stat.S_ISREG(source_stat.st_mode)):
+        raise LifecycleError(f"unsupported checkpoint source: {resolved}")
+    return resolved
+
+
+def checkpoint_sources(task: Path, requested: Iterable[str]) -> list[Path]:
+    automatic_names = (
+        "checkpoint",
+        "evidence",
+        "progress.md",
+        "workitems.tsv",
+        "closeout.md",
+        "final-validation.md",
+    )
+    candidates = [task / name for name in automatic_names if (task / name).exists()]
+    candidates.extend(Path(value) if Path(value).is_absolute() else task / value for value in requested)
+    unique: dict[str, Path] = {}
+    for candidate in candidates:
+        resolved = validate_checkpoint_source(task, candidate)
+        unique[resolved.relative_to(task.resolve()).as_posix()] = resolved
+    return [unique[name] for name in sorted(unique)]
+
+
+def copy_checkpoint_file_fd(
+    source_fd: int,
+    target: Path,
+    expected: os.stat_result,
+    expected_digest: bytes,
+) -> None:
+    if stat_identity(os.fstat(source_fd)) != stat_identity(expected):
+        raise LifecycleError("checkpoint file changed before copy")
+    target_fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    digest = hashlib.sha256()
+    try:
+        while chunk := os.read(source_fd, 1024 * 1024):
+            digest.update(chunk)
+            view = memoryview(chunk)
+            while view:
+                written = os.write(target_fd, view)
+                view = view[written:]
+        os.fsync(target_fd)
+    finally:
+        os.close(target_fd)
+    if stat_identity(os.fstat(source_fd)) != stat_identity(expected):
+        raise LifecycleError("checkpoint file changed during copy")
+    if digest.digest() != expected_digest:
+        raise LifecycleError("checkpoint file content changed during copy")
+
+
+def copy_checkpoint_directory_fd(
+    source_fd: int,
+    target: Path,
+    relative: str,
+    snapshot: dict[str, tuple[tuple[int, int, int, int, int, int], bytes | None]],
+) -> None:
+    target.mkdir(mode=0o700)
+    for name in sorted(os.listdir(source_fd)):
+        child_relative = f"{relative}/{name}" if relative else name
+        expected = snapshot.get(child_relative)
+        child_stat = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
+        if expected is None or stat_identity(child_stat) != expected[0]:
+            raise LifecycleError(f"checkpoint entry changed before copy: {child_relative}")
+        child_target = target / name
+        if stat.S_ISDIR(child_stat.st_mode):
+            child_fd = os.open(
+                name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=source_fd
+            )
+            try:
+                if stat_identity(os.fstat(child_fd)) != stat_identity(child_stat):
+                    raise LifecycleError(
+                        f"checkpoint directory changed before copy: {child_relative}"
+                    )
+                copy_checkpoint_directory_fd(
+                    child_fd, child_target, child_relative, snapshot
+                )
+            finally:
+                os.close(child_fd)
+        elif stat.S_ISREG(child_stat.st_mode) and expected[1] is not None:
+            child_fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=source_fd)
+            try:
+                copy_checkpoint_file_fd(child_fd, child_target, child_stat, expected[1])
+            finally:
+                os.close(child_fd)
+        else:
+            raise LifecycleError(f"checkpoint source contains an unsupported file: {child_relative}")
+
+
+def checkpoint_snapshot_fd(
+    source_fd: int,
+) -> dict[str, tuple[tuple[int, int, int, int, int, int], bytes | None]]:
+    """Snapshot a checkpoint tree without resolving any path component again."""
+    identities: dict[
+        str, tuple[tuple[int, int, int, int, int, int], bytes | None]
+    ] = {}
+
+    def snapshot_entry(directory_fd: int, relative: str) -> None:
+        directory_stat = os.fstat(directory_fd)
+        identities[relative] = (stat_identity(directory_stat), None)
+        names = sorted(os.listdir(directory_fd))
+        for name in names:
+            child_relative = f"{relative}/{name}" if relative else name
+            child_stat = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            if stat.S_ISDIR(child_stat.st_mode):
+                child_fd = os.open(
+                    name,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=directory_fd,
+                )
+                try:
+                    if stat_identity(os.fstat(child_fd)) != stat_identity(child_stat):
+                        raise LifecycleError(
+                            f"checkpoint directory changed during snapshot: {child_relative}"
+                        )
+                    snapshot_entry(child_fd, child_relative)
+                finally:
+                    os.close(child_fd)
+            elif stat.S_ISREG(child_stat.st_mode):
+                child_fd = os.open(
+                    name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory_fd
+                )
+                try:
+                    digest = digest_open_file(child_fd, child_stat)
+                finally:
+                    os.close(child_fd)
+                identities[child_relative] = (stat_identity(child_stat), digest)
+            else:
+                raise LifecycleError(
+                    f"checkpoint source contains an unsupported file: {child_relative}"
+                )
+        if sorted(os.listdir(directory_fd)) != names or stat_identity(
+            os.fstat(directory_fd)
+        ) != stat_identity(directory_stat):
+            raise LifecycleError(
+                f"checkpoint directory changed during snapshot: {relative or '.'}"
+            )
+
+    root_stat = os.fstat(source_fd)
+    if stat.S_ISDIR(root_stat.st_mode):
+        snapshot_entry(source_fd, "")
+    elif stat.S_ISREG(root_stat.st_mode):
+        duplicate = os.dup(source_fd)
+        try:
+            os.lseek(duplicate, 0, os.SEEK_SET)
+            digest = digest_open_file(duplicate, root_stat)
+        finally:
+            os.close(duplicate)
+        identities[""] = (stat_identity(root_stat), digest)
+    else:
+        raise LifecycleError("unsupported checkpoint source")
+    return identities
+
+
+def open_checkpoint_beneath(task_fd: int, relative: Path) -> int:
+    """Open a task-relative checkpoint while rejecting symlinks in every component."""
+    if relative.is_absolute() or not relative.parts or any(
+        part in {"", ".", ".."} for part in relative.parts
+    ):
+        raise LifecycleError(f"invalid checkpoint path: {relative}")
+    current_fd = os.dup(task_fd)
+    try:
+        for index, part in enumerate(relative.parts):
+            flags = os.O_RDONLY | os.O_NOFOLLOW
+            if index < len(relative.parts) - 1:
+                flags |= os.O_DIRECTORY
+            next_fd = os.open(part, flags, dir_fd=current_fd)
+            os.close(current_fd)
+            current_fd = next_fd
+        return current_fd
+    except BaseException:
+        os.close(current_fd)
+        raise
+
+
+def copy_checkpoint_source(task: Path, source: Path, destination: Path) -> None:
+    relative = source.relative_to(task.resolve())
+    target = destination / "payload" / relative
+    target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    task_fd = os.open(task, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    source_fd = -1
+    try:
+        source_fd = open_checkpoint_beneath(task_fd, relative)
+        snapshot = checkpoint_snapshot_fd(source_fd)
+        root_stat = os.fstat(source_fd)
+        if stat.S_ISDIR(root_stat.st_mode):
+            copy_checkpoint_directory_fd(source_fd, target, "", snapshot)
+        elif stat.S_ISREG(root_stat.st_mode) and snapshot[""][1] is not None:
+            os.lseek(source_fd, 0, os.SEEK_SET)
+            copy_checkpoint_file_fd(source_fd, target, root_stat, snapshot[""] [1])
+        else:
+            raise LifecycleError(f"unsupported checkpoint source: {source}")
+        if checkpoint_snapshot_fd(source_fd) != snapshot:
+            raise LifecycleError(f"checkpoint source changed while it was copied: {source}")
+        rebound_fd = open_checkpoint_beneath(task_fd, relative)
+        try:
+            if stat_identity(os.fstat(rebound_fd)) != stat_identity(root_stat):
+                raise LifecycleError(f"checkpoint path changed while it was copied: {source}")
+        finally:
+            os.close(rebound_fd)
+    finally:
+        if source_fd >= 0:
+            os.close(source_fd)
+        os.close(task_fd)
+
+
+def recovery_references(paths: Paths) -> dict[str, Any]:
+    value = load_json(paths.state / "recovery-references.json", {"objects": {}})
+    if not isinstance(value, dict) or not isinstance(value.get("objects"), dict):
+        raise LifecycleError("invalid recovery reference ledger")
+    return value
+
+
+def recovery_object_id(value: str) -> bool:
+    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
+def reconcile_recovery_store_locked(paths: Paths) -> dict[str, list[str]]:
+    """Repair crash-interrupted object/ledger transitions while holding recovery_lock."""
+    ledger = recovery_references(paths)
+    objects = ledger["objects"]
+    result: dict[str, list[str]] = {
+        "orphans_registered": [],
+        "missing_marked": [],
+        "deletions_finished": [],
+        "temporary_removed": [],
+        "references_activated": [],
+        "references_orphaned": [],
+    }
+
+    for temporary in sorted(paths.recovery.glob(".creating-*")):
+        if temporary.is_symlink() or not temporary.is_dir():
+            raise LifecycleError(f"invalid recovery temporary object: {temporary}")
+        blockers = filesystem_boundary_blockers(temporary)
+        blockers.extend(process_blockers(temporary))
+        if blockers:
+            raise LifecycleError(
+                "cannot reconcile recovery temporary object: " + "; ".join(blockers)
+            )
+        temporary_stat = temporary.stat()
+        snapshot = tree_identity_snapshot(temporary)
+        remove_tree_same_device(
+            temporary,
+            paths.recovery.stat().st_dev,
+            temporary_stat.st_ino,
+            snapshot,
+        )
+        result["temporary_removed"].append(temporary.name)
+
+    disk_objects: dict[str, Path] = {}
+    for entry in paths.recovery.iterdir():
+        if entry.name.startswith("."):
+            continue
+        if not recovery_object_id(entry.name) or entry.is_symlink() or not entry.is_dir():
+            raise LifecycleError(f"invalid unmanaged recovery object: {entry}")
+        disk_objects[entry.name] = entry
+
+    now = iso()
+    for object_id, package in disk_objects.items():
+        record = objects.get(object_id)
+        if not isinstance(record, dict):
+            objects[object_id] = {
+                "created_at": now,
+                "fingerprint": fingerprint(package),
+                "references": {},
+                "orphaned_at": now,
+            }
+            result["orphans_registered"].append(object_id)
+            continue
+        if record.get("gc_state") == "deleting":
+            package_stat = package.stat()
+            snapshot = tree_identity_snapshot(package)
+            remove_tree_same_device(
+                package,
+                paths.recovery.stat().st_dev,
+                package_stat.st_ino,
+                snapshot,
+            )
+            objects.pop(object_id)
+            result["deletions_finished"].append(object_id)
+        else:
+            record.pop("missing_at", None)
+
+    for object_id, record in list(objects.items()):
+        if not isinstance(record, dict):
+            continue
+        if object_id in disk_objects:
+            continue
+        if record.get("gc_state") == "deleting":
+            objects.pop(object_id)
+            result["deletions_finished"].append(object_id)
+        elif not record.get("missing_at"):
+            record["missing_at"] = now
+            result["missing_marked"].append(object_id)
+
+    with manifest_location_lock(paths):
+        expected_references: set[tuple[str, str]] = set()
+        manifest_locations = [*iter_tasks(paths)]
+        manifest_locations.extend(
+            entry
+            for entry in paths.quarantine.iterdir()
+            if entry.is_dir() and not entry.is_symlink()
+        )
+        for location in manifest_locations:
+            try:
+                manifest = load_manifest(location)
+            except (LifecycleError, OSError, TypeError, ValueError):
+                continue
+            compaction = (manifest or {}).get("compaction")
+            package = (
+                compaction.get("recovery_package")
+                if isinstance(compaction, dict)
+                else None
+            )
+            if not isinstance(package, dict) or compaction.get("checkpoint_released_at"):
+                continue
+            object_id = str(package.get("object_id", ""))
+            task_instance_id = str(package.get("task_instance_id", ""))
+            if not recovery_object_id(object_id) or not task_instance_id:
+                continue
+            expected_references.add((object_id, task_instance_id))
+            record = objects.get(object_id)
+            references = record.get("references") if isinstance(record, dict) else None
+            if not isinstance(references, dict) or object_id not in disk_objects:
+                continue
+            reference = references.get(task_instance_id)
+            if not isinstance(reference, dict):
+                reference = {
+                    "task": str(manifest.get("name", location.name)),
+                    "created_at": now,
+                    "minimum_until": now,
+                    "released_at": None,
+                }
+                references[task_instance_id] = reference
+            if reference.get("state") != "active" or reference.get("released_at"):
+                reference["state"] = "active"
+                reference["released_at"] = None
+                reference.pop("release_reason", None)
+                result["references_activated"].append(
+                    f"{object_id}:{task_instance_id}"
+                )
+
+        for object_id, record in objects.items():
+            references = record.get("references") if isinstance(record, dict) else None
+            if not isinstance(references, dict):
+                continue
+            for task_instance_id, reference in list(references.items()):
+                if (object_id, task_instance_id) in expected_references:
+                    continue
+                if not isinstance(reference, dict) or reference.get("released_at"):
+                    continue
+                reference["state"] = "released"
+                reference["released_at"] = now
+                reference["release_reason"] = "manifest-reference-missing"
+                result["references_orphaned"].append(
+                    f"{object_id}:{task_instance_id}"
+                )
+
+    if any(result.values()):
+        atomic_json(paths.state / "recovery-references.json", ledger)
+        fsync_directory(paths.recovery)
+    return result
+
+
+def reconcile_recovery_store(paths: Paths) -> dict[str, list[str]]:
+    with recovery_lock(paths):
+        return reconcile_recovery_store_locked(paths)
+
+
+def create_recovery_package(
+    paths: Paths,
+    config: dict[str, Any],
+    task: Path,
+    manifest: dict[str, Any],
+    required_paths: list[str],
+    requested_checkpoints: Iterable[str],
+    publish_manifest: Callable[[dict[str, Any]], None],
+    *,
+    checkpoint_root: Path | None = None,
+) -> dict[str, Any]:
+    source_root = checkpoint_root or task
+    sources = checkpoint_sources(source_root, requested_checkpoints)
+    source_bytes = sum(allocated_bytes(source) for source in sources)
+    checkpoint_limit = int(manifest["budget"]["checkpoint_limit_bytes"])
+    if source_bytes > checkpoint_limit:
+        raise LifecycleError(
+            f"checkpoint sources use {source_bytes} bytes, above the {checkpoint_limit}-byte limit"
+        )
+    quota = gibibytes(config["recovery_store_quota_gib"])
+    task_instance_id = ensure_task_instance_id(manifest)
+    with recovery_lock(paths):
+        reconcile_recovery_store_locked(paths)
+        store_bytes = allocated_bytes(paths.recovery)
+        if store_bytes + source_bytes > quota:
+            raise LifecycleError("recovery store quota would be exceeded")
+        temporary = paths.recovery / f".creating-{task.name}-{secrets.token_hex(8)}"
+        temporary.mkdir(mode=0o700)
+        try:
+            for source in sources:
+                copy_checkpoint_source(source_root, source, temporary)
+            contract = {
+                "schema": 1,
+                "task": task.name,
+                "task_instance_id": task_instance_id,
+                "created_at": iso(),
+                "source_fingerprint": manifest.get("fingerprint"),
+                "checkpoint_paths": [
+                    source.relative_to(source_root.resolve()).as_posix() for source in sources
+                ],
+                "required_paths": required_paths,
+                "recovery_note": manifest.get("recovery_note"),
+            }
+            atomic_json(temporary / "contract.json", contract)
+            package_fingerprint = fingerprint(temporary)
+            object_id = str(package_fingerprint["sha256"])
+            destination = paths.recovery / object_id
+            if destination.exists():
+                if destination.is_symlink() or fingerprint(destination) != package_fingerprint:
+                    raise LifecycleError(f"recovery object collision at {destination}")
+                shutil.rmtree(temporary)
+            else:
+                os.replace(temporary, destination)
+                fsync_directory(paths.recovery)
+            ledger = recovery_references(paths)
+            objects = ledger["objects"]
+            record = objects.setdefault(
+                object_id,
+                {
+                    "created_at": iso(),
+                    "fingerprint": package_fingerprint,
+                    "references": {},
+                },
+            )
+            if not isinstance(record, dict) or not isinstance(record.get("references"), dict):
+                raise LifecycleError(f"invalid recovery ledger record: {object_id}")
+            reference = {
+                "task": task.name,
+                "created_at": iso(),
+                "minimum_until": iso(
+                    utc_now() + dt.timedelta(days=float(config["recovery_gc_days"]))
+                ),
+                "released_at": None,
+                "state": "publishing",
+            }
+            record["references"][task_instance_id] = reference
+            atomic_json(paths.state / "recovery-references.json", ledger)
+            package = {
+                "object_id": object_id,
+                "task": task.name,
+                "task_instance_id": task_instance_id,
+                "path": str(destination),
+                "fingerprint": package_fingerprint,
+                "checkpoint_allocated_bytes": source_bytes,
+            }
+            publish_manifest(package)
+            reference["state"] = "active"
+            atomic_json(paths.state / "recovery-references.json", ledger)
+            return package
+        except BaseException:
+            if temporary.exists():
+                shutil.rmtree(temporary)
+            raise
+
+
+def recovery_package_blockers(
+    paths: Paths, package: Any, expected_task_instance_id: Any = None
+) -> list[str]:
+    if not isinstance(package, dict):
+        return ["recovery package metadata is missing"]
+    object_id = str(package.get("object_id", ""))
+    if not recovery_object_id(object_id):
+        return ["recovery package object id is invalid"]
+    expected_path = paths.recovery / object_id
+    configured_path = Path(str(package.get("path", ""))).expanduser()
+    if configured_path != expected_path:
+        return ["recovery package path does not match the managed object id"]
+    if not expected_path.is_dir() or expected_path.is_symlink():
+        return [f"recovery package is missing or invalid: {expected_path}"]
+    expected_fingerprint = package.get("fingerprint")
+    if expected_fingerprint != fingerprint(expected_path):
+        return [f"recovery package content changed: {expected_path}"]
+    ledger = recovery_references(paths)
+    record = ledger["objects"].get(object_id)
+    if not isinstance(record, dict) or not isinstance(record.get("references"), dict):
+        return [f"recovery package reference is missing: {object_id}"]
+    task_instance_id = str(package.get("task_instance_id", ""))
+    if task_instance_id != str(expected_task_instance_id or ""):
+        return ["recovery package task instance does not match the task manifest"]
+    reference = record["references"].get(task_instance_id)
+    if (
+        not isinstance(reference, dict)
+        or reference.get("state") != "active"
+        or reference.get("released_at")
+    ):
+        return [f"active recovery package reference is missing for task instance: {task_instance_id}"]
+    return []
+
+
+def release_recovery_reference(paths: Paths, task_instance_id: str, reason: str) -> list[str]:
+    released: list[str] = []
+    with recovery_lock(paths):
+        ledger = recovery_references(paths)
+        for object_id, record in ledger["objects"].items():
+            references = record.get("references") if isinstance(record, dict) else None
+            reference = references.get(task_instance_id) if isinstance(references, dict) else None
+            if not isinstance(reference, dict) or reference.get("released_at"):
+                continue
+            reference["released_at"] = iso()
+            reference["release_reason"] = reason
+            reference["state"] = "released"
+            released.append(object_id)
+        if released:
+            atomic_json(paths.state / "recovery-references.json", ledger)
+    return released
+
+
+def gc_recovery_store(
+    paths: Paths, config: dict[str, Any], dry_run: bool
+) -> list[dict[str, str]]:
+    purged: list[dict[str, str]] = []
+    limit = int(config["max_recovery_gc_per_run"])
+    minimum_age = dt.timedelta(days=float(config["recovery_gc_days"]))
+    with recovery_lock(paths):
+        reconcile_recovery_store_locked(paths)
+        ledger = recovery_references(paths)
+        for object_id, record in list(ledger["objects"].items()):
+            if len(purged) >= limit:
+                break
+            if not isinstance(record, dict):
+                continue
+            if record.get("missing_at"):
+                continue
+            references = record.get("references")
+            if not isinstance(references, dict):
+                continue
+            if references:
+                released_times = [
+                    parse_time(reference.get("released_at"))
+                    for reference in references.values()
+                    if isinstance(reference, dict)
+                ]
+                if len(released_times) != len(references) or any(
+                    value is None for value in released_times
+                ):
+                    continue
+                eligible_at = max(value for value in released_times if value is not None)
+            else:
+                eligible_at = parse_time(record.get("orphaned_at"))
+                if eligible_at is None:
+                    continue
+            if utc_now() - eligible_at < minimum_age:
+                continue
+            package = paths.recovery / object_id
+            candidate = {"object_id": object_id, "path": str(package)}
+            if dry_run:
+                purged.append(candidate)
+                continue
+            if package.is_symlink() or not package.is_dir() or package.resolve().parent != paths.recovery.resolve():
+                raise LifecycleError(f"invalid recovery object during GC: {package}")
+            record["gc_state"] = "deleting"
+            record["gc_started_at"] = iso()
+            atomic_json(paths.state / "recovery-references.json", ledger)
+            package_stat = package.stat()
+            snapshot = tree_identity_snapshot(package)
+            remove_tree_same_device(
+                package,
+                paths.recovery.stat().st_dev,
+                package_stat.st_ino,
+                snapshot,
+            )
+            ledger["objects"].pop(object_id)
+            atomic_json(paths.state / "recovery-references.json", ledger)
+            purged.append(candidate)
+        if not dry_run and purged:
+            fsync_directory(paths.recovery)
+    return purged
+
+
+def compaction_blockers(
+    paths: Paths, task: Path, manifest: dict[str, Any]
+) -> list[str]:
+    compaction = manifest.get("compaction")
+    if not isinstance(compaction, dict):
+        return ["compaction is not requested"]
+    blockers: list[str] = []
+    if manifest.get("status") not in {"complete", "compacting", "compact_incomplete"}:
+        blockers.append(f"status is {manifest.get('status', 'unknown')}, not compactable")
+    expected = compaction.get("fingerprint")
+    status = manifest.get("status")
+    if compaction.get("status") == "compacted":
+        pass
+    elif status == "complete":
+        if expected != fingerprint(task):
+            blockers.append("task content changed after compaction was requested")
+    elif compaction.get("phase") == "deleting":
+        tombstone = task / ".codex-tmp-compacting"
+        unexpected = [
+            child.name
+            for child in task.iterdir()
+            if child.name not in {MANIFEST_NAME, tombstone.name}
+        ]
+        if unexpected:
+            blockers.append("task received new content after compaction was interrupted")
+        elif not tombstone.is_dir() or tombstone.is_symlink():
+            blockers.append("compaction tombstone is missing or invalid")
+        elif expected != fingerprint(tombstone):
+            blockers.append("compaction tombstone no longer matches the requested fingerprint")
+    else:
+        blockers.append("compaction was interrupted before the deletion checkpoint")
+    blockers.extend(recovery_path_blockers(paths, compaction.get("required_paths", [])))
+    blockers.extend(
+        recovery_package_blockers(
+            paths,
+            compaction.get("recovery_package"),
+            manifest.get("task_instance_id"),
+        )
+    )
+    blockers.extend(filesystem_boundary_blockers(task))
+    blockers.extend(git_blockers(task))
+    blockers.extend(process_blockers(task))
+    return blockers
+
+
+def command_compact(
+    args: argparse.Namespace, paths: Paths, config: dict[str, Any]
+) -> dict[str, Any]:
+    task = resolve_task(paths, args.task)
+    with task_lock(paths, task.name) as acquired:
+        if not acquired:
+            raise LifecycleError(f"cannot acquire task lock: {task.name}")
+        return request_compaction(args, paths, config, task)
+
+
+def command_migrate_legacy_compaction(
+    args: argparse.Namespace, paths: Paths, config: dict[str, Any]
+) -> dict[str, Any]:
+    task = resolve_task(paths, args.task)
+    with task_lock(paths, task.name) as acquired:
+        if not acquired:
+            raise LifecycleError(f"cannot acquire task lock: {task.name}")
+        manifest = load_manifest(task)
+        compaction = (manifest or {}).get("compaction")
+        if (
+            not manifest
+            or manifest.get("status") != "compact_incomplete"
+            or not isinstance(compaction, dict)
+            or compaction.get("phase") != "deleting"
+            or isinstance(compaction.get("recovery_package"), dict)
+        ):
+            raise LifecycleError(
+                "only a legacy deleting-phase compaction without a recovery package can migrate"
+            )
+        tombstone = task / ".codex-tmp-compacting"
+        if tombstone.is_symlink() or not tombstone.is_dir():
+            raise LifecycleError("legacy compaction tombstone is missing or invalid")
+        unexpected = [
+            child.name
+            for child in task.iterdir()
+            if child.name not in {MANIFEST_NAME, tombstone.name}
+        ]
+        if unexpected:
+            raise LifecycleError("legacy compaction task contains unexpected new content")
+        required_paths = list(compaction.get("required_paths", []))
+        blockers = recovery_path_blockers(paths, required_paths)
+        blockers.extend(filesystem_boundary_blockers(tombstone))
+        blockers.extend(git_blockers(tombstone))
+        blockers.extend(process_blockers(task))
+        blockers.extend(process_blockers(tombstone))
+        if blockers:
+            raise LifecycleError("cannot migrate legacy compaction: " + "; ".join(blockers))
+        if not isinstance(manifest.get("budget"), dict):
+            apply_budget(manifest, config, "default", None)
+        current_fingerprint = fingerprint(tombstone)
+        compaction.setdefault("allocated_bytes_before", allocated_bytes(task))
+
+        def publish_manifest(recovery_package: dict[str, Any]) -> None:
+            compaction["legacy_original_fingerprint"] = compaction.get("fingerprint")
+            compaction["fingerprint"] = current_fingerprint
+            compaction["recovery_package"] = recovery_package
+            compaction["legacy_migrated_at"] = iso()
+            write_manifest(task, manifest)
+
+        package = create_recovery_package(
+            paths,
+            config,
+            task,
+            manifest,
+            required_paths,
+            [],
+            publish_manifest,
+            checkpoint_root=tombstone,
+        )
+        blockers = compaction_blockers(paths, task, manifest)
+        if blockers:
+            raise LifecycleError("legacy compaction migration remains blocked: " + "; ".join(blockers))
+        append_history(
+            paths,
+            {"action": "legacy-compaction-migrate", "task": str(task)},
+        )
+        return {
+            "task": str(task),
+            "status": "compact_incomplete",
+            "recovery_package": package,
+            "ready_for_maintenance_retry": True,
+        }
+
+
+def request_compaction(
+    args: argparse.Namespace, paths: Paths, config: dict[str, Any], task: Path
+) -> dict[str, Any]:
+    manifest = load_manifest(task)
+    if not manifest or manifest.get("status") != "complete":
+        raise LifecycleError("only a completed managed task can be compacted")
+    if isinstance(manifest.get("compaction"), dict):
+        raise LifecycleError("task already has a compaction record")
+    require_writer(paths, task, manifest, lifecycle_owner(manifest))
+    required_paths = sorted(
+        {str(Path(value).expanduser().resolve()) for value in (args.depends_on or [])}
+    )
+    if not required_paths:
+        raise LifecycleError("compaction requires at least one external --depends-on recovery path")
+    initial_blockers = recovery_path_blockers(paths, required_paths)
+    initial_blockers.extend(filesystem_boundary_blockers(task))
+    initial_blockers.extend(git_blockers(task))
+    initial_blockers.extend(process_blockers(task))
+    if initial_blockers:
+        raise LifecycleError("cannot request compaction: " + "; ".join(initial_blockers))
+    now = utc_now()
+    grace = dt.timedelta(hours=float(config["compact_grace_hours"]))
+    manifest["recovery_note"] = args.note
+    original_required_paths = list(manifest.get("required_paths", []))
+    compaction = {
+        "status": "pending",
+        "requested_at": iso(now),
+        "not_before": iso(now + grace),
+        "fingerprint": fingerprint(task),
+        "required_paths": required_paths,
+        "recovery_note": args.note,
+        "allocated_bytes_before": allocated_bytes(task),
+    }
+
+    def publish_manifest(recovery_package: dict[str, Any]) -> None:
+        compaction["recovery_package"] = recovery_package
+        manifest["compaction"] = compaction
+        manifest["required_paths"] = sorted(
+            {*manifest.get("required_paths", []), *required_paths}
+        )
+        write_manifest(task, manifest)
+
+    recovery_package = create_recovery_package(
+        paths,
+        config,
+        task,
+        manifest,
+        required_paths,
+        args.checkpoint or [],
+        publish_manifest,
+    )
+    blockers = compaction_blockers(paths, task, manifest)
+    if blockers:
+        release_recovery_reference(
+            paths,
+            str(recovery_package["task_instance_id"]),
+            "compaction-request-failed",
+        )
+        manifest.pop("compaction", None)
+        manifest["required_paths"] = original_required_paths
+        write_manifest(task, manifest)
+        raise LifecycleError("cannot request compaction: " + "; ".join(blockers))
+    append_history(
+        paths,
+        {
+            "action": "compact-request",
+            "task": str(task),
+            "not_before": manifest["compaction"]["not_before"],
+        },
+    )
+    return {
+        "task": str(task),
+        "status": "compact_pending",
+        "not_before": manifest["compaction"]["not_before"],
+        "required_paths": required_paths,
+    }
+
+
+def recovery_stub(manifest: dict[str, Any]) -> str:
+    compaction = manifest["compaction"]
+    lines = [
+        "# Codex task recovery stub",
+        "",
+        "The completed task body was compacted to release local disk space.",
+        "",
+        f"Recovery note: {compaction['recovery_note']}",
+        "",
+        "Required recovery sources:",
+    ]
+    lines.extend(f"- `{path}`" for path in compaction["required_paths"])
+    package = compaction.get("recovery_package")
+    package_path = package.get("path", "missing") if isinstance(package, dict) else "missing"
+    lines.extend(
+        [
+            "",
+            "Managed checkpoint package:",
+            f"- `{package_path}`",
+            "",
+            "Rebuild the workspace from these sources before continuing.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def stat_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        stat.S_IFMT(value.st_mode),
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
+def rename_stable_identity(value: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        stat.S_IFMT(value.st_mode),
+        value.st_size,
+        value.st_mtime_ns,
+    )
+
+
+def digest_open_file(file_fd: int, expected: os.stat_result) -> bytes:
+    opened = os.fstat(file_fd)
+    if stat_identity(opened) != stat_identity(expected):
+        raise LifecycleError("filesystem entry changed before content verification")
+    digest = hashlib.sha256()
+    while chunk := os.read(file_fd, 1024 * 1024):
+        digest.update(chunk)
+    if stat_identity(os.fstat(file_fd)) != stat_identity(expected):
+        raise LifecycleError("filesystem entry changed during content verification")
+    return digest.digest()
+
+
+def path_content_digest(path: Path, expected: os.stat_result) -> bytes | None:
+    if stat.S_ISREG(expected.st_mode):
+        file_fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            return digest_open_file(file_fd, expected)
+        finally:
+            os.close(file_fd)
+    if stat.S_ISLNK(expected.st_mode):
+        target = os.fsencode(os.readlink(path))
+        if stat_identity(path.lstat()) != stat_identity(expected):
+            raise LifecycleError(f"filesystem entry changed during symlink verification: {path}")
+        return hashlib.sha256(target).digest()
+    return None
+
+
+def tree_identity_snapshot(
+    path: Path,
+) -> dict[str, tuple[tuple[int, int, int, int, int, int], bytes | None]]:
+    root_stat = path.lstat()
+    identities = {"": (stat_identity(root_stat), path_content_digest(path, root_stat))}
+    for base, dirs, names in os.walk(path, topdown=True, followlinks=False):
+        base_path = Path(base)
+        for name in [*dirs, *names]:
+            child = base_path / name
+            relative = child.relative_to(path).as_posix()
+            child_stat = child.lstat()
+            identities[relative] = (
+                stat_identity(child_stat),
+                path_content_digest(child, child_stat),
+            )
+    return identities
+
+
+def remove_tree_same_device(
+    path: Path,
+    expected_device: int,
+    expected_inode: int | None = None,
+    expected_entries: dict[
+        str, tuple[tuple[int, int, int, int, int, int], bytes | None]
+    ]
+    | None = None,
+) -> None:
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    identities = expected_entries or tree_identity_snapshot(path)
+
+    def require_identity(
+        relative: str, value: os.stat_result, *, after_rename: bool = False
+    ) -> None:
+        expected = identities.get(relative)
+        matches = expected is not None and (
+            rename_stable_identity(value) == expected[0][:5]
+            if after_rename
+            else stat_identity(value) == expected[0]
+        )
+        if not matches:
+            raise LifecycleError(f"refusing to delete changed filesystem entry at {path / relative}")
+
+    def require_content(
+        relative: str, directory_fd: int, name: str, value: os.stat_result
+    ) -> None:
+        expected = identities.get(relative)
+        if expected is None or expected[1] is None:
+            return
+        if stat.S_ISREG(value.st_mode):
+            file_fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory_fd)
+            try:
+                actual = digest_open_file(file_fd, value)
+            finally:
+                os.close(file_fd)
+        elif stat.S_ISLNK(value.st_mode):
+            actual = hashlib.sha256(os.fsencode(os.readlink(name, dir_fd=directory_fd))).digest()
+        else:
+            actual = None
+        if actual != expected[1]:
+            raise LifecycleError(f"refusing to delete changed file content at {path / relative}")
+
+    def remove_contents(directory_fd: int, relative_parent: str = "") -> None:
+        with os.scandir(directory_fd) as entries:
+            names = sorted(entry.name for entry in entries)
+        for name in names:
+            relative = f"{relative_parent}/{name}" if relative_parent else name
+            child_stat = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            require_identity(relative, child_stat)
+            if child_stat.st_dev != expected_device:
+                raise LifecycleError(f"refusing to cross filesystem boundary at {path / name}")
+            staged_name = f".codex-tmp-delete-{secrets.token_hex(12)}"
+            os.rename(
+                name,
+                staged_name,
+                src_dir_fd=directory_fd,
+                dst_dir_fd=directory_fd,
+            )
+            staged_stat = os.stat(staged_name, dir_fd=directory_fd, follow_symlinks=False)
+            require_identity(relative, staged_stat, after_rename=True)
+            if stat.S_ISDIR(staged_stat.st_mode):
+                child_fd = os.open(staged_name, flags, dir_fd=directory_fd)
+                try:
+                    opened_stat = os.fstat(child_fd)
+                    require_identity(relative, opened_stat, after_rename=True)
+                    if opened_stat.st_dev != expected_device:
+                        raise LifecycleError(f"refusing to cross filesystem boundary at {path / name}")
+                    remove_contents(child_fd, relative)
+                finally:
+                    os.close(child_fd)
+                os.rmdir(staged_name, dir_fd=directory_fd)
+            else:
+                final_stat = os.stat(staged_name, dir_fd=directory_fd, follow_symlinks=False)
+                require_identity(relative, final_stat, after_rename=True)
+                require_content(relative, directory_fd, staged_name, final_stat)
+                os.unlink(staged_name, dir_fd=directory_fd)
+        with os.scandir(directory_fd) as remaining:
+            if next(remaining, None) is not None:
+                raise LifecycleError(f"refusing to delete directory that received new content: {path}")
+
+    directory_fd = os.open(path, flags)
+    try:
+        root_stat = os.fstat(directory_fd)
+        require_identity("", root_stat, after_rename=True)
+        if root_stat.st_dev != expected_device:
+            raise LifecycleError(f"refusing to cross filesystem boundary at {path}")
+        if expected_inode is not None and root_stat.st_ino != expected_inode:
+            raise LifecycleError(f"refusing to delete replaced filesystem tree at {path}")
+        remove_contents(directory_fd)
+    finally:
+        os.close(directory_fd)
+    os.rmdir(path)
+
+
+def compact_task(paths: Paths, task: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+    require_writer(paths, task, manifest, lifecycle_owner(manifest))
+    compaction = manifest["compaction"]
+    tombstone = task / ".codex-tmp-compacting"
+    boundary_blockers = filesystem_boundary_blockers(task)
+    if boundary_blockers:
+        raise LifecycleError("cannot compact across filesystem boundaries: " + "; ".join(boundary_blockers))
+    manifest["status"] = "compacting"
+    compaction["status"] = "compacting"
+    compaction["started_at"] = compaction.get("started_at") or iso()
+    retry_deletion = tombstone.is_dir() and compaction.get("phase") == "deleting"
+    compaction["phase"] = "deleting" if retry_deletion else "moving"
+    write_manifest(task, manifest)
+    try:
+        if not retry_deletion:
+            tombstone.mkdir(mode=0o700)
+            for child in sorted(task.iterdir(), key=lambda item: item.name):
+                if child.name in {MANIFEST_NAME, tombstone.name}:
+                    continue
+                destination = tombstone / child.name
+                if destination.exists() or destination.is_symlink():
+                    raise LifecycleError(f"compaction destination already exists: {destination}")
+                os.replace(child, destination)
+            compaction["phase"] = "deleting"
+            write_manifest(task, manifest)
+            fsync_directory(task)
+        tombstone_stat = tombstone.stat()
+        if compaction.get("fingerprint") != fingerprint(tombstone):
+            raise LifecycleError("compaction tombstone does not match the requested fingerprint")
+        current_tombstone_stat = tombstone.stat()
+        if (
+            current_tombstone_stat.st_dev != tombstone_stat.st_dev
+            or current_tombstone_stat.st_ino != tombstone_stat.st_ino
+        ):
+            raise LifecycleError("compaction tombstone changed while it was being verified")
+        final_blockers = recovery_path_blockers(paths, compaction.get("required_paths", []))
+        final_blockers.extend(
+            recovery_package_blockers(
+                paths,
+                compaction.get("recovery_package"),
+                manifest.get("task_instance_id"),
+            )
+        )
+        final_blockers.extend(filesystem_boundary_blockers(tombstone))
+        final_blockers.extend(git_blockers(tombstone))
+        if final_blockers:
+            raise LifecycleError("compaction safety changed before deletion: " + "; ".join(final_blockers))
+        deletion_snapshot = tree_identity_snapshot(tombstone)
+        final_blockers = recovery_path_blockers(paths, compaction.get("required_paths", []))
+        final_blockers.extend(
+            recovery_package_blockers(
+                paths,
+                compaction.get("recovery_package"),
+                manifest.get("task_instance_id"),
+            )
+        )
+        final_blockers.extend(filesystem_boundary_blockers(tombstone))
+        final_blockers.extend(process_blockers(task))
+        final_blockers.extend(process_blockers(tombstone))
+        if final_blockers:
+            raise LifecycleError("compaction safety changed before deletion: " + "; ".join(final_blockers))
+        remove_tree_same_device(
+            tombstone,
+            task.stat().st_dev,
+            tombstone_stat.st_ino,
+            deletion_snapshot,
+        )
+        fsync_directory(task)
+    except BaseException:
+        manifest = load_manifest(task) or manifest
+        manifest["status"] = "compact_incomplete"
+        manifest["compaction"]["status"] = "compact_incomplete"
+        manifest["compaction"]["interrupted_at"] = iso()
+        write_manifest(task, manifest)
+        raise
+    (task / "RECOVERY.md").write_text(recovery_stub(manifest), encoding="utf-8")
+    manifest["status"] = "complete"
+    compaction["status"] = "compacted"
+    compaction["phase"] = "compacted"
+    compaction["compacted_at"] = iso()
+    compaction["allocated_bytes_after"] = allocated_bytes(task)
+    compaction["reclaimed_allocated_bytes"] = max(
+        0,
+        int(compaction["allocated_bytes_before"]) - int(compaction["allocated_bytes_after"]),
+    )
+    manifest["fingerprint"] = fingerprint(task)
+    write_manifest(task, manifest)
+    append_history(
+        paths,
+        {
+            "action": "compact",
+            "task": str(task),
+            "reclaimed_allocated_bytes": compaction["reclaimed_allocated_bytes"],
+        },
+    )
+    return {
+        "task": str(task),
+        "reclaimed_allocated_bytes": compaction["reclaimed_allocated_bytes"],
+    }
+
+
+def compact_completed_tasks(
+    paths: Paths, config: dict[str, Any]
+) -> dict[str, list[dict[str, Any]]]:
+    checked: list[dict[str, Any]] = []
+    compacted: list[dict[str, Any]] = []
+    limit = int(config["max_compact_per_run"])
+    for task in iter_tasks(paths):
+        with task_lock(paths, task.name, blocking=False) as acquired:
+            if not acquired:
+                checked.append({"task": str(task), "blockers": ["task is busy"]})
+                continue
+            try:
+                manifest = load_manifest(task)
+            except (LifecycleError, OSError, TypeError, ValueError) as exc:
+                checked.append({"task": str(task), "blockers": [str(exc)]})
+                continue
+            compaction = (manifest or {}).get("compaction")
+            if not manifest or not isinstance(compaction, dict):
+                continue
+            if config["lifecycle_mode"] == "shadow" and lifecycle_owner(manifest) == "v2":
+                checked.append(
+                    {"task": str(task), "blockers": ["v2 task frozen by shadow rollback"]}
+                )
+                continue
+            if compaction.get("status") not in {"pending", "compacting", "compact_incomplete"}:
+                continue
+            not_before = parse_time(compaction.get("not_before"))
+            blockers = compaction_blockers(paths, task, manifest)
+            if not_before is None:
+                blockers.append("compaction not_before is missing or invalid")
+            elif utc_now() < not_before:
+                blockers.append("compaction grace period has not elapsed")
+            checked.append({"task": str(task), "blockers": blockers})
+            if blockers or len(compacted) >= limit:
+                continue
+            require_writer(paths, task, manifest, lifecycle_owner(manifest))
+            compacted.append(compact_task(paths, task, manifest))
+    return {"checked": checked, "compacted": compacted}
+
+
+def command_adopt(paths: Paths, config: dict[str, Any]) -> dict[str, Any]:
+    return {"adopted": adopt_unmanaged(paths, config)}
+
+
+def command_release_checkpoint(args: argparse.Namespace, paths: Paths) -> dict[str, Any]:
+    task = resolve_task(paths, args.task)
+    with task_lock(paths, task.name) as acquired:
+        if not acquired:
+            raise LifecycleError(f"cannot acquire task lock: {task.name}")
+        manifest = load_manifest(task)
+        compaction = (manifest or {}).get("compaction")
+        if (
+            not manifest
+            or manifest.get("status") != "complete"
+            or not isinstance(compaction, dict)
+            or compaction.get("status") != "compacted"
+        ):
+            raise LifecycleError("only a compacted completed task can release its checkpoint")
+        package = compaction.get("recovery_package")
+        task_instance_id = (
+            str(package.get("task_instance_id", "")) if isinstance(package, dict) else ""
+        )
+        if task_instance_id != str(manifest.get("task_instance_id", "")):
+            raise LifecycleError("recovery package task instance does not match the task manifest")
+        released = release_recovery_reference(paths, task_instance_id, "explicit-release")
+        if not released:
+            raise LifecycleError("task has no active recovery checkpoint reference")
+        compaction["checkpoint_released_at"] = iso()
+        write_manifest(task, manifest)
+        return {"task": str(task), "released_objects": released}
+
+
+def command_recovery_gc(
+    args: argparse.Namespace, paths: Paths, config: dict[str, Any]
+) -> dict[str, Any]:
+    return {"purged": gc_recovery_store(paths, config, args.dry_run)}
+
+
+def scratch_state(manifest: dict[str, Any]) -> dict[str, Any]:
+    value = manifest.get("scratch")
+    if not isinstance(value, dict) or value.get("protocol") != "fenced":
+        value = {
+            "protocol": "fenced",
+            "generation": 0,
+            "current_path": None,
+            "writers": {},
+        }
+        manifest["scratch"] = value
+    if not isinstance(value.get("writers"), dict):
+        raise LifecycleError("invalid scratch writer state")
+    return value
+
+
+def validated_scratch_path(
+    task: Path, scratch: dict[str, Any], *, must_exist: bool
+) -> Path:
+    try:
+        generation = int(scratch.get("generation", -1))
+    except (TypeError, ValueError) as exc:
+        raise LifecycleError("invalid scratch generation") from exc
+    current = scratch.get("current_path")
+    expected = f"scratch/g{generation:08d}"
+    if generation <= 0 or not isinstance(current, str) or current != expected:
+        raise LifecycleError("scratch path does not match its fenced generation")
+    relative = Path(current)
+    if relative.is_absolute() or ".." in relative.parts or relative.parts != tuple(expected.split("/")):
+        raise LifecycleError("scratch path must be a managed relative generation path")
+    scratch_root = task / "scratch"
+    if scratch_root.is_symlink() or not scratch_root.is_dir():
+        raise LifecycleError(f"scratch root is missing or invalid: {scratch_root}")
+    path = task / relative
+    if must_exist and (path.is_symlink() or not path.is_dir()):
+        raise LifecycleError(f"current scratch path is missing or invalid: {path}")
+    try:
+        resolved_parent = path.parent.resolve(strict=True)
+        expected_parent = scratch_root.resolve(strict=True)
+        resolved_path = path.resolve(strict=must_exist)
+        resolved_path.relative_to(expected_parent)
+    except (FileNotFoundError, ValueError) as exc:
+        raise LifecycleError(f"scratch path escapes its managed root: {path}") from exc
+    if resolved_parent != expected_parent:
+        raise LifecycleError(f"scratch path has an invalid ancestor: {path}")
+    return path
+
+
+def command_scratch_acquire(args: argparse.Namespace, paths: Paths) -> dict[str, Any]:
+    task = resolve_task(paths, args.task)
+    with task_lock(paths, task.name) as acquired:
+        if not acquired:
+            raise LifecycleError(f"cannot acquire task lock: {task.name}")
+        manifest = load_manifest(task)
+        if not manifest or manifest.get("status") != "active":
+            raise LifecycleError("scratch can only be acquired for an active managed task")
+        scratch = scratch_state(manifest)
+        current = scratch.get("current_path")
+        if not current:
+            generation = int(scratch.get("generation", 0)) + 1
+            current = f"scratch/g{generation:08d}"
+            path = task / current
+            path.mkdir(parents=True, mode=0o700)
+            scratch["generation"] = generation
+            scratch["current_path"] = current
+        else:
+            path = validated_scratch_path(task, scratch, must_exist=True)
+        # Prefix generated values so argparse never mistakes a leading '-' for
+        # another option when the token is passed back to scratch commands.
+        token = f"w_{secrets.token_urlsafe(24)}"
+        session_id = effective_session_id(args.session_id)
+        scratch["writers"][token] = {
+            "session_id": session_id,
+            "acquired_at": iso(),
+            "generation": scratch["generation"],
+        }
+        write_manifest(task, manifest)
+        return {
+            "task": str(task),
+            "path": str(path),
+            "token": token,
+            "generation": scratch["generation"],
+        }
+
+
+def command_scratch_check(args: argparse.Namespace, paths: Paths) -> dict[str, Any]:
+    task = resolve_task(paths, args.task)
+    manifest = load_manifest(task)
+    scratch = scratch_state(manifest or {})
+    writer = scratch["writers"].get(args.token)
+    try:
+        valid = isinstance(writer, dict) and int(writer.get("generation", -1)) == int(
+            scratch.get("generation", 0)
+        )
+    except (TypeError, ValueError):
+        valid = False
+    path: Path | None = None
+    if valid:
+        try:
+            path = validated_scratch_path(task, scratch, must_exist=True)
+        except LifecycleError:
+            valid = False
+    return {
+        "task": str(task),
+        "valid": valid,
+        "path": str(path) if valid and path is not None else None,
+        "generation": scratch.get("generation"),
+    }
+
+
+def command_scratch_release(args: argparse.Namespace, paths: Paths) -> dict[str, Any]:
+    task = resolve_task(paths, args.task)
+    with task_lock(paths, task.name) as acquired:
+        if not acquired:
+            raise LifecycleError(f"cannot acquire task lock: {task.name}")
+        manifest = load_manifest(task)
+        if not manifest:
+            raise LifecycleError("scratch task is unmanaged")
+        scratch = scratch_state(manifest)
+        if args.token not in scratch["writers"]:
+            raise LifecycleError("scratch fencing token is not active")
+        scratch["writers"].pop(args.token)
+        scratch["last_released_at"] = iso()
+        write_manifest(task, manifest)
+        return {"task": str(task), "released": True, "generation": scratch["generation"]}
+
+
+def clean_fenced_scratch(paths: Paths, task: Path, manifest: dict[str, Any]) -> dict[str, Any] | None:
+    scratch = scratch_state(manifest)
+    current = scratch.get("current_path")
+    if not current:
+        return None
+    if scratch["writers"]:
+        raise LifecycleError("active scratch fencing tokens still exist")
+    source = validated_scratch_path(task, scratch, must_exist=False)
+    if not source.exists():
+        scratch["current_path"] = None
+        write_manifest(task, manifest)
+        return None
+    source = validated_scratch_path(task, scratch, must_exist=True)
+    blockers = filesystem_boundary_blockers(source)
+    blockers.extend(git_blockers(source))
+    blockers.extend(process_blockers(source))
+    if blockers:
+        raise LifecycleError("scratch cleanup blocked: " + "; ".join(blockers))
+    before = allocated_bytes(source)
+    source_stat = source.stat()
+    snapshot = tree_identity_snapshot(source)
+    scratch_root = task / "scratch"
+    scratch_root_stat = scratch_root.stat()
+    tombstone = scratch_root / f".deleting-g{int(scratch['generation']):08d}-{secrets.token_hex(4)}"
+    source = validated_scratch_path(task, scratch, must_exist=True)
+    if stat_identity(source.stat()) != stat_identity(source_stat):
+        raise LifecycleError("scratch path identity changed before cleanup")
+    if stat_identity(scratch_root.stat()) != stat_identity(scratch_root_stat):
+        raise LifecycleError("scratch root identity changed before cleanup")
+    os.replace(source, tombstone)
+    fsync_directory(tombstone.parent)
+    final_blockers = filesystem_boundary_blockers(tombstone)
+    final_blockers.extend(process_blockers(tombstone))
+    if final_blockers:
+        os.replace(tombstone, source)
+        fsync_directory(source.parent)
+        raise LifecycleError("scratch cleanup safety changed: " + "; ".join(final_blockers))
+    remove_tree_same_device(
+        tombstone,
+        task.stat().st_dev,
+        source_stat.st_ino,
+        snapshot,
+    )
+    scratch["current_path"] = None
+    scratch["cleaned_at"] = iso()
+    write_manifest(task, manifest)
+    append_history(paths, {"action": "scratch-clean", "task": str(task), "bytes": before})
+    return {"task": str(task), "reclaimed_allocated_bytes": before}
+
+
+def command_scratch_clean(args: argparse.Namespace, paths: Paths) -> dict[str, Any]:
+    task = resolve_task(paths, args.task)
+    with task_lock(paths, task.name) as acquired:
+        if not acquired:
+            raise LifecycleError(f"cannot acquire task lock: {task.name}")
+        manifest = load_manifest(task)
+        if not manifest:
+            raise LifecycleError("scratch task is unmanaged")
+        if manifest.get("status") == "active" and not args.allow_active:
+            raise LifecycleError("active scratch requires explicit --allow-active after writer shutdown")
+        result = clean_fenced_scratch(paths, task, manifest)
+        return result or {"task": str(task), "reclaimed_allocated_bytes": 0}
+
+
+def is_symlink_only_node_modules(path: Path) -> bool:
+    if path.name != "node_modules":
+        return False
+
+    # os.walk otherwise suppresses descendant scandir errors.  A caller must
+    # see those failures so cleanup can retain the tree and report a blocker.
+    def raise_walk_error(exc: OSError) -> None:
+        raise exc
+
+    saw_symlink = False
+    for base, dirs, names in os.walk(
+        path, topdown=True, followlinks=False, onerror=raise_walk_error
+    ):
+        traversable: list[str] = []
+        for name in dirs:
+            child = Path(base) / name
+            child_mode = child.lstat().st_mode
+            if stat.S_ISLNK(child_mode):
+                saw_symlink = True
+            elif stat.S_ISDIR(child_mode):
+                traversable.append(name)
+            else:
+                return False
+        dirs[:] = traversable
+        for name in names:
+            child_mode = (Path(base) / name).lstat().st_mode
+            if stat.S_ISLNK(child_mode):
+                saw_symlink = True
+            else:
+                return False
+    return saw_symlink
+
+
+def reproducible_directories(task: Path) -> list[Path]:
+    candidates: list[Path] = []
+    for base, dirs, _names in os.walk(task, topdown=True, followlinks=False):
+        kept: list[str] = []
+        for name in dirs:
+            path = Path(base) / name
+            if path.is_symlink():
+                continue
+            if name.startswith(".codex-tmp-output-deleting-"):
+                continue
+            if name in {"target", "node_modules"}:
+                candidates.append(path)
+            else:
+                kept.append(name)
+        dirs[:] = kept
+    return sorted(candidates, key=lambda path: len(path.parts), reverse=True)
+
+
+def reproducible_output_tombstones(task: Path) -> list[Path]:
+    tombstones: list[Path] = []
+    for base, dirs, _names in os.walk(task, topdown=True, followlinks=False):
+        kept: list[str] = []
+        for name in dirs:
+            path = Path(base) / name
+            if path.is_symlink():
+                continue
+            if name.startswith(".codex-tmp-output-deleting-"):
+                tombstones.append(path)
+            else:
+                kept.append(name)
+        dirs[:] = kept
+    return sorted(tombstones, key=lambda path: len(path.parts), reverse=True)
+
+
+def remove_reproducible_tombstone(task: Path, tombstone: Path) -> dict[str, Any]:
+    blockers = filesystem_boundary_blockers(tombstone)
+    blockers.extend(git_blockers(tombstone))
+    blockers.extend(process_blockers(tombstone))
+    if blockers:
+        raise LifecycleError("reproducible output tombstone is busy: " + "; ".join(blockers))
+    before = allocated_bytes(tombstone)
+    tombstone_stat = tombstone.stat()
+    snapshot = tree_identity_snapshot(tombstone)
+    remove_tree_same_device(
+        tombstone,
+        task.stat().st_dev,
+        tombstone_stat.st_ino,
+        snapshot,
+    )
+    return {"path": str(tombstone), "reclaimed_allocated_bytes": before}
+
+
+def clean_reproducible_outputs(
+    paths: Paths,
+    task: Path,
+    manifest: dict[str, Any],
+    *,
+    allow_active_v2: bool = False,
+) -> dict[str, Any]:
+    active_v2 = (
+        allow_active_v2
+        and manifest.get("status") == "active"
+        and lifecycle_owner(manifest) == "v2"
+    )
+    if manifest.get("status") != "complete" and not active_v2:
+        raise LifecycleError("automatic reproducible cleanup requires a completed task")
+    cleaned: list[dict[str, Any]] = []
+    blocked: list[dict[str, str]] = []
+    for tombstone in reproducible_output_tombstones(task):
+        try:
+            cleaned.append(remove_reproducible_tombstone(task, tombstone))
+        except (LifecycleError, OSError) as exc:
+            blocked.append({"path": str(tombstone), "reason": str(exc)})
+    for candidate in reproducible_directories(task):
+        if not candidate.exists():
+            continue
+        try:
+            if is_symlink_only_node_modules(candidate):
+                continue
+        except OSError as exc:
+            blocked.append(
+                {
+                    "path": str(candidate),
+                    "reason": f"cannot inspect reproducible output links: {exc}",
+                }
+            )
+            continue
+        blockers = filesystem_boundary_blockers(candidate)
+        blockers.extend(git_blockers(candidate))
+        blockers.extend(process_blockers(candidate))
+        if blockers:
+            blocked.append({"path": str(candidate), "reason": "; ".join(blockers)})
+            continue
+        before = allocated_bytes(candidate)
+        candidate_stat = candidate.stat()
+        snapshot = tree_identity_snapshot(candidate)
+        tombstone = candidate.parent / f".codex-tmp-output-deleting-{secrets.token_hex(6)}"
+        os.replace(candidate, tombstone)
+        fsync_directory(candidate.parent)
+        final_blockers = filesystem_boundary_blockers(tombstone)
+        final_blockers.extend(process_blockers(tombstone))
+        if final_blockers:
+            os.replace(tombstone, candidate)
+            fsync_directory(candidate.parent)
+            blocked.append(
+                {"path": str(candidate), "reason": "; ".join(final_blockers)}
+            )
+            continue
+        try:
+            remove_tree_same_device(
+                tombstone,
+                task.stat().st_dev,
+                candidate_stat.st_ino,
+                snapshot,
+            )
+        except (LifecycleError, OSError) as exc:
+            blocked.append(
+                {"path": str(candidate), "tombstone": str(tombstone), "reason": str(exc)}
+            )
+            continue
+        cleaned.append({"path": str(candidate), "reclaimed_allocated_bytes": before})
+    if cleaned:
+        append_history(
+            paths,
+            {
+                "action": "reproducible-clean",
+                "task": str(task),
+                "bytes": sum(item["reclaimed_allocated_bytes"] for item in cleaned),
+            },
+        )
+    return {"task": str(task), "cleaned": cleaned, "blocked": blocked}
+
+
+def command_clean_reproducible(args: argparse.Namespace, paths: Paths) -> dict[str, Any]:
+    task = resolve_task(paths, args.task)
+    with task_lock(paths, task.name) as acquired:
+        if not acquired:
+            raise LifecycleError(f"cannot acquire task lock: {task.name}")
+        manifest = load_manifest(task)
+        if not manifest:
+            raise LifecycleError("task is unmanaged")
+        require_writer(paths, task, manifest, lifecycle_owner(manifest))
+        return clean_reproducible_outputs(paths, task, manifest)
+
+
+def active_hold(manifest: dict[str, Any], now: dt.datetime | None = None) -> dict[str, Any] | None:
+    hold = manifest.get("hold")
+    if not isinstance(hold, dict):
+        return None
+    expires_at = parse_time(hold.get("expires_at"))
+    if expires_at is None or expires_at <= (now or utc_now()):
+        return None
+    return hold
+
+
+def interface_state(
+    task: Path, manifest: dict[str, Any], now: dt.datetime | None = None
+) -> dict[str, Any]:
+    observed_at = now or utc_now()
+    owner = lifecycle_owner(manifest)
+    compaction = manifest.get("compaction")
+    hold = active_hold(manifest, observed_at)
+    base = {
+        "name": task.name,
+        "path": str(task),
+        "lifecycle_owner": owner,
+        "lifecycle_generation": manifest.get("lifecycle_generation", 1),
+        "hold": hold,
+        "blockers": [],
+    }
+    if isinstance(compaction, dict) and compaction.get("status") == "compacted":
+        return {**base, "state": "recoverable"}
+    status = manifest.get("status")
+    if status in {"complete", "compacting", "compact_incomplete"}:
+        return {**base, "state": "settling"}
+    if owner == "legacy":
+        state = "blocked" if status == "keep" else "in-use"
+        blockers = ["legacy lifecycle owner"] if state == "blocked" else []
+        return {**base, "state": state, "blockers": blockers}
+    lease_expires_at = effective_lease_expiry(manifest)
+    if lease_expires_at is not None and lease_expires_at > observed_at:
+        return {**base, "state": "in-use", "lease_expires_at": iso(lease_expires_at)}
+    reproducible = reproducible_directories(task)
+    if reproducible:
+        return {
+            **base,
+            "state": "settling",
+            "reclaimable_paths": [str(path) for path in reproducible],
+        }
+    blockers = ["workspace contains unique or undelivered content"]
+    if hold:
+        blockers.append(f"hold active until {hold['expires_at']}")
+    return {**base, "state": "blocked", "blockers": blockers}
+
+
+def observation_path(paths: Paths, task_name: str) -> Path:
+    digest = hashlib.sha256(task_name.encode("utf-8")).hexdigest()
+    return paths.state / "v2-observations" / f"{digest}.json"
+
+
+DECISION_ACTION_RANK = {
+    "preserve": 0,
+    "clean-reproducible": 1,
+    "compact": 2,
+    "quarantine": 3,
+    "purge": 4,
+}
+
+
+def legacy_shadow_decision(
+    task: Path, manifest: dict[str, Any] | None
+) -> dict[str, Any]:
+    if manifest is None:
+        return {
+            "engine": "legacy",
+            "state": "blocked",
+            "action": "preserve",
+            "blockers": ["unmanaged task"],
+        }
+    if lifecycle_owner(manifest) != "legacy":
+        return {
+            "engine": "legacy",
+            "state": "blocked",
+            "action": "preserve",
+            "blockers": ["legacy engine does not own this task"],
+        }
+    status = str(manifest.get("status", "unknown"))
+    if status in {"complete", "compacting", "compact_incomplete"}:
+        action = "clean-reproducible" if reproducible_directories(task) else "preserve"
+        return {
+            "engine": "legacy",
+            "state": "settling",
+            "action": action,
+            "blockers": [],
+        }
+    blockers = ["legacy keep"] if status == "keep" else []
+    return {
+        "engine": "legacy",
+        "state": "blocked" if blockers else "in-use",
+        "action": "preserve",
+        "blockers": blockers,
+    }
+
+
+def v2_shadow_decision(
+    task: Path, manifest: dict[str, Any] | None, now: dt.datetime
+) -> dict[str, Any]:
+    if manifest is None:
+        return {
+            "engine": "v2",
+            "state": "blocked",
+            "action": "preserve",
+            "blockers": ["task must be claimed before v2 can mutate it"],
+        }
+    compaction = manifest.get("compaction")
+    if isinstance(compaction, dict) and compaction.get("status") == "compacted":
+        return {
+            "engine": "v2",
+            "state": "recoverable",
+            "action": "preserve",
+            "blockers": [],
+        }
+    status = str(manifest.get("status", "unknown"))
+    lease_expires_at = effective_lease_expiry(manifest)
+    if status == "active" and lease_expires_at is not None and lease_expires_at > now:
+        return {
+            "engine": "v2",
+            "state": "in-use",
+            "action": "preserve",
+            "blockers": [],
+        }
+    reproducible = reproducible_directories(task)
+    if reproducible:
+        return {
+            "engine": "v2",
+            "state": "settling",
+            "action": "clean-reproducible",
+            "reclaimable_paths": [str(path) for path in reproducible],
+            "blockers": ["workspace process and Git preflight required"],
+        }
+    blockers = ["workspace contains unique or undelivered content"]
+    hold = active_hold(manifest, now)
+    if hold:
+        blockers.append(f"hold active until {hold['expires_at']}")
+    return {
+        "engine": "v2",
+        "state": "blocked",
+        "action": "preserve",
+        "blockers": blockers,
+    }
+
+
+def compare_lifecycle_decisions(
+    legacy: dict[str, Any],
+    v2: dict[str, Any],
+    mode: str,
+    owner: str,
+) -> dict[str, Any]:
+    legacy_rank = DECISION_ACTION_RANK.get(str(legacy.get("action")), 0)
+    v2_rank = DECISION_ACTION_RANK.get(str(v2.get("action")), 0)
+    more_aggressive = v2_rank > legacy_rank
+    if mode == "shadow":
+        effective = legacy
+        explanation = (
+            "shadow mode keeps the legacy decision authoritative; v2 may only observe"
+            if more_aggressive
+            else "shadow mode keeps the legacy decision authoritative"
+        )
+    elif owner == "v2":
+        effective = v2
+        explanation = "v2-new dispatches only tasks claimed by v2"
+    else:
+        effective = legacy
+        explanation = "v2-new leaves legacy-owned tasks with the legacy engine"
+    return {
+        "legacy_decision": legacy,
+        "v2_decision": v2,
+        "effective_decision": effective,
+        "v2_more_aggressive": more_aggressive,
+        "explanation": explanation,
+    }
+
+
+def write_task_observation(
+    paths: Paths,
+    task: Path,
+    manifest: dict[str, Any] | None,
+    comparison: dict[str, Any],
+) -> None:
+    task_stat = task.stat()
+    atomic_json(
+        observation_path(paths, task.name),
+        {
+            "schema": 2,
+            "evaluated_at": iso(),
+            "task_instance_id": manifest.get("task_instance_id") if manifest else None,
+            "device": task_stat.st_dev,
+            "inode": task_stat.st_ino,
+            **comparison,
+        },
+    )
+
+
+def reconcile_v2_tasks(paths: Paths, config: dict[str, Any]) -> dict[str, Any]:
+    mode = str(config["lifecycle_mode"])
+    observations: list[dict[str, Any]] = []
+    candidates: list[tuple[dt.datetime, Path, dict[str, Any]]] = []
+    errors: list[dict[str, str]] = []
+    now = utc_now()
+    tasks = list(iter_tasks(paths))
+    for task in tasks:
+        try:
+            manifest = load_manifest(task)
+            legacy = legacy_shadow_decision(task, manifest)
+            v2 = v2_shadow_decision(task, manifest, now)
+            owner = lifecycle_owner(manifest) if manifest else "legacy"
+            comparison = compare_lifecycle_decisions(legacy, v2, mode, owner)
+            write_task_observation(paths, task, manifest, comparison)
+            observations.append({"task": task.name, **comparison})
+            decision = comparison["effective_decision"]
+            if manifest is None or owner != "v2" or decision["state"] == "in-use":
+                continue
+            lease = effective_lease_expiry(manifest) or dt.datetime.min.replace(
+                tzinfo=UTC
+            )
+            candidates.append((lease, task, manifest))
+        except (LifecycleError, OSError, TypeError, ValueError) as exc:
+            errors.append({"task": task.name, "reason": str(exc)})
+            comparison = compare_lifecycle_decisions(
+                {
+                    "engine": "legacy",
+                    "state": "blocked",
+                    "action": "preserve",
+                    "blockers": [f"observation failed: {exc}"],
+                },
+                {
+                    "engine": "v2",
+                    "state": "blocked",
+                    "action": "preserve",
+                    "blockers": [f"observation failed: {exc}"],
+                },
+                mode,
+                "legacy",
+            )
+            try:
+                write_task_observation(paths, task, None, comparison)
+                observations.append({"task": task.name, **comparison})
+            except OSError as observation_exc:
+                errors.append(
+                    {"task": task.name, "reason": f"cannot write observation: {observation_exc}"}
+                )
+    summary = {
+        "mode": mode,
+        "evaluated_at": iso(now),
+        "counts": {
+            state: sum(
+                1
+                for item in observations
+                if item["effective_decision"]["state"] == state
+            )
+            for state in ("in-use", "settling", "recoverable", "blocked")
+        },
+        "coverage": {
+            "total_directories": len(tasks),
+            "observed": len(observations),
+            "missing": len(tasks) - len(observations),
+            "compare_count": len(observations),
+            "v2_more_aggressive": sum(
+                1 for item in observations if item["v2_more_aggressive"]
+            ),
+            "unexplained_more_aggressive": sum(
+                1
+                for item in observations
+                if item["v2_more_aggressive"] and not item["explanation"]
+            ),
+        },
+        "mutated": [],
+        "output_cleanup": [],
+        "errors": errors,
+    }
+    if mode == "shadow":
+        atomic_json(paths.state / "v2-shadow.json", summary)
+        return summary
+    limit = int(config["v2_max_reconcile_per_run"])
+    for _lease, task, _manifest in sorted(candidates, key=lambda item: (item[0], item[1].name))[
+        :limit
+    ]:
+        with task_lock(paths, task.name, blocking=False) as acquired:
+            if not acquired:
+                errors.append({"task": task.name, "reason": "task is busy"})
+                continue
+            try:
+                manifest = load_manifest(task)
+                if manifest is None or lifecycle_owner(manifest) != "v2":
+                    continue
+                lease = effective_lease_expiry(manifest)
+                if lease is not None and lease > utc_now():
+                    continue
+                require_writer(paths, task, manifest, "v2")
+                workspace_blockers = process_blockers(task)
+                workspace_blockers.extend(enclosing_git_blockers(task))
+                if workspace_blockers:
+                    summary["output_cleanup"].append(
+                        {
+                            "task": str(task),
+                            "cleaned": [],
+                            "blocked": [
+                                {
+                                    "path": str(task),
+                                    "reason": "; ".join(workspace_blockers),
+                                }
+                            ],
+                        }
+                    )
+                    continue
+                result = clean_reproducible_outputs(
+                    paths, task, manifest, allow_active_v2=True
+                )
+                if result["cleaned"] or result["blocked"]:
+                    summary["output_cleanup"].append(result)
+                if result["cleaned"]:
+                    summary["mutated"].append(task.name)
+                legacy = legacy_shadow_decision(task, manifest)
+                v2 = v2_shadow_decision(task, manifest, utc_now())
+                comparison = compare_lifecycle_decisions(
+                    legacy, v2, mode, lifecycle_owner(manifest)
+                )
+                write_task_observation(paths, task, manifest, comparison)
+            except (LifecycleError, OSError, TypeError, ValueError) as exc:
+                errors.append({"task": task.name, "reason": str(exc)})
+    atomic_json(paths.state / "v2-shadow.json", summary)
+    return summary
+
+
+def task_status(paths: Paths, task: Path) -> dict[str, Any]:
+    manifest = load_manifest(task)
+    if manifest is None:
+        return {
+            "name": task.name,
+            "path": str(task),
+            "state": "blocked",
+            "blockers": ["unmanaged task"],
+            "allocated_bytes": allocated_bytes(task),
+        }
+    result = interface_state(task, manifest)
+    result["allocated_bytes"] = allocated_bytes(task)
+    return result
+
+
+def command_status(args: argparse.Namespace, paths: Paths) -> dict[str, Any]:
+    if args.task:
+        return task_status(paths, resolve_task(paths, args.task))
+    tasks = [task_status(paths, task) for task in iter_tasks(paths)]
+    totals = {
+        state: sum(
+            int(item["allocated_bytes"]) for item in tasks if item["state"] == state
+        )
+        for state in ("in-use", "settling", "recoverable", "blocked")
+    }
+    return {"root": str(paths.root), "allocated_bytes_by_state": totals, "tasks": tasks}
+
+
+def command_hold(
+    args: argparse.Namespace, paths: Paths, config: dict[str, Any]
+) -> dict[str, Any]:
+    task = resolve_task(paths, args.task)
+    with task_lock(paths, task.name) as acquired:
+        if not acquired:
+            raise LifecycleError(f"cannot acquire task lock: {task.name}")
+        manifest = load_manifest(task)
+        if manifest is None:
+            raise LifecycleError("task is unmanaged")
+        require_writer(paths, task, manifest, lifecycle_owner(manifest))
+        if args.clear:
+            manifest.pop("hold", None)
+            write_manifest(task, manifest)
+            return {"task": str(task), "hold": None}
+        expires_at = parse_time(args.until)
+        now = utc_now()
+        maximum = now + dt.timedelta(days=float(config["hold_max_days"]))
+        if expires_at is None or expires_at <= now:
+            raise LifecycleError("hold expiry must be a future ISO-8601 timestamp")
+        if expires_at > maximum:
+            raise LifecycleError(f"hold cannot exceed {config['hold_max_days']} days")
+        reason = str(args.reason or "").strip()
+        if not reason:
+            raise LifecycleError("hold requires a reason")
+        manifest["hold"] = {
+            "owner": effective_session_id(None),
+            "reason": reason,
+            "created_at": iso(now),
+            "expires_at": iso(expires_at),
+        }
+        write_manifest(task, manifest)
+        return {"task": str(task), "hold": manifest["hold"]}
+
+
+def finish_transition(location: Path, manifest: dict[str, Any]) -> None:
+    transition = manifest.get("transition")
+    if not isinstance(transition, dict):
+        raise LifecycleError(f"missing transition metadata in {location}")
+    location_stat = location.stat()
+    if (
+        location_stat.st_dev != int(transition.get("source_device", -1))
+        or location_stat.st_ino != int(transition.get("source_inode", -1))
+        or manifest.get("task_instance_id") != transition.get("task_instance_id")
+    ):
+        raise LifecycleError(f"transition task generation changed in {location}")
+    kind = transition.get("kind")
+    if kind == "quarantine":
+        manifest["status"] = "quarantined"
+        manifest["original_path"] = transition["source"]
+        manifest["quarantined_at"] = transition["started_at"]
+        manifest["quarantine_id"] = location.name
+    elif kind == "restore":
+        manifest["status"] = "active"
+        manifest["restored_at"] = iso()
+        manifest["completed_at"] = None
+        manifest["fingerprint"] = None
+        for key in (
+            "purge_pending_at",
+            "purge_started_at",
+            "purge_interrupted_at",
+        ):
+            manifest.pop(key, None)
+    else:
+        raise LifecycleError(f"unknown transition kind in {location}: {kind}")
+    manifest.pop("transition", None)
+    write_manifest(location, manifest)
+
+
+def transition_entry_stat(parent_fd: int, name: str) -> os.stat_result | None:
+    try:
+        return os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+
+
+def rollback_transition_move(
+    source: Path,
+    destination: Path,
+    source_parent_fd: int,
+    destination_parent_fd: int,
+    moved_stat: os.stat_result,
+    original_manifest: dict[str, Any],
+) -> None:
+    if transition_entry_stat(source_parent_fd, source.name) is not None:
+        raise LifecycleError("transition rollback refused because the source path is occupied")
+    destination_stat = transition_entry_stat(destination_parent_fd, destination.name)
+    if destination_stat is None or rename_stable_identity(
+        destination_stat
+    ) != rename_stable_identity(moved_stat):
+        raise LifecycleError("transition rollback refused because the destination changed")
+    os.replace(
+        destination.name,
+        source.name,
+        src_dir_fd=destination_parent_fd,
+        dst_dir_fd=source_parent_fd,
+    )
+    restored_stat = transition_entry_stat(source_parent_fd, source.name)
+    if restored_stat is None or rename_stable_identity(
+        restored_stat
+    ) != rename_stable_identity(moved_stat):
+        raise LifecycleError("transition rollback could not verify the restored source")
+    fsync_directory(source.parent)
+    if destination.parent != source.parent:
+        fsync_directory(destination.parent)
+    restored_manifest = load_manifest(source)
+    expected_instance = original_manifest.get("task_instance_id")
+    if restored_manifest and restored_manifest.get("task_instance_id") == expected_instance:
+        original_manifest.pop("transition", None)
+        write_manifest(source, original_manifest)
+
+
+def execute_transition_move(
+    source: Path,
+    destination: Path,
+    manifest: dict[str, Any],
+) -> None:
+    transition = manifest.get("transition")
+    if not isinstance(transition, dict):
+        raise LifecycleError("transition metadata is missing")
+    expected_device = transition.get("source_device")
+    expected_inode = transition.get("source_inode")
+    expected_instance = transition.get("task_instance_id")
+    original_manifest = json.loads(json.dumps(manifest))
+    source_parent_fd = os.open(source.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    destination_parent_fd = os.open(
+        destination.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    )
+    moved_stat: os.stat_result | None = None
+    try:
+        fd_stat = transition_entry_stat(source_parent_fd, source.name)
+        source_manifest = load_manifest(source) if fd_stat is not None else None
+        if (
+            fd_stat is None
+            or fd_stat.st_dev != expected_device
+            or fd_stat.st_ino != expected_inode
+            or not stat.S_ISDIR(fd_stat.st_mode)
+            or not source_manifest
+            or source_manifest.get("task_instance_id") != expected_instance
+        ):
+            raise LifecycleError(f"task generation changed at rename: {source}")
+        if transition_entry_stat(destination_parent_fd, destination.name) is not None:
+            raise LifecycleError(f"transition destination already exists: {destination}")
+        os.replace(
+            source.name,
+            destination.name,
+            src_dir_fd=source_parent_fd,
+            dst_dir_fd=destination_parent_fd,
+        )
+        moved_stat = transition_entry_stat(destination_parent_fd, destination.name)
+        if moved_stat is None:
+            raise LifecycleError("transition destination is missing after rename")
+        fsync_directory(source.parent)
+        if destination.parent != source.parent:
+            fsync_directory(destination.parent)
+        try:
+            finish_transition(destination, manifest)
+        except BaseException as finish_error:
+            try:
+                rollback_transition_move(
+                    source,
+                    destination,
+                    source_parent_fd,
+                    destination_parent_fd,
+                    moved_stat,
+                    original_manifest,
+                )
+            except BaseException as rollback_error:
+                raise LifecycleError(
+                    f"transition finalization failed and rollback was unsafe: "
+                    f"{finish_error}; {rollback_error}"
+                ) from finish_error
+            raise LifecycleError(
+                f"transition finalization failed and the move was rolled back: {finish_error}"
+            ) from finish_error
+    finally:
+        os.close(source_parent_fd)
+        os.close(destination_parent_fd)
+
+
+def move_with_transition_locked(
+    source: Path,
+    destination: Path,
+    manifest: dict[str, Any],
+    kind: str,
+) -> None:
+    if source.is_symlink() or not source.is_dir():
+        raise LifecycleError(f"invalid transition source: {source}")
+    source_stat = source.stat()
+    task_instance_id = ensure_task_instance_id(manifest)
+    manifest["transition"] = {
+        "kind": kind,
+        "source": str(source),
+        "destination": str(destination),
+        "started_at": iso(),
+        "source_device": source_stat.st_dev,
+        "source_inode": source_stat.st_ino,
+        "task_instance_id": task_instance_id,
+    }
+    write_manifest(source, manifest)
+    current_stat = source.stat()
+    current_manifest = load_manifest(source)
+    if (
+        source.is_symlink()
+        or current_stat.st_dev != source_stat.st_dev
+        or current_stat.st_ino != source_stat.st_ino
+        or not current_manifest
+        or current_manifest.get("task_instance_id") != task_instance_id
+    ):
+        raise LifecycleError(f"cannot {kind}; task generation changed before rename: {source}")
+    try:
+        execute_transition_move(source, destination, manifest)
+    except (OSError, LifecycleError) as exc:
+        if source.exists() and not source.is_symlink():
+            persisted = load_manifest(source)
+            if persisted and persisted.get("task_instance_id") == task_instance_id:
+                manifest.pop("transition", None)
+                write_manifest(source, manifest)
+        raise LifecycleError(f"cannot {kind} {source}: {exc}") from exc
+
+
+def move_with_transition(
+    paths: Paths,
+    source: Path,
+    destination: Path,
+    manifest: dict[str, Any],
+    kind: str,
+) -> None:
+    with manifest_location_lock(paths):
+        move_with_transition_locked(source, destination, manifest, kind)
+
+
+def reconcile_transitions_locked(paths: Paths) -> None:
+    for tombstone in sorted(paths.quarantine.glob(".purging-*")):
+        if tombstone.is_symlink() or not tombstone.is_dir():
+            raise LifecycleError(f"invalid purge tombstone: {tombstone}")
+        original = paths.quarantine / tombstone.name.removeprefix(".purging-")
+        if original.exists():
+            raise LifecycleError(f"purge tombstone conflicts with quarantine entry: {tombstone}")
+        manifest = load_manifest(tombstone)
+        if not manifest:
+            raise LifecycleError(f"purge tombstone has no manifest: {tombstone}")
+        task_name = str(manifest.get("name", tombstone.name))
+        with task_lock(paths, task_name) as acquired:
+            if not acquired:
+                raise LifecycleError(f"cannot acquire task lock: {task_name}")
+            require_writer(paths, tombstone, manifest, lifecycle_owner(manifest))
+            os.replace(tombstone, original)
+            fsync_directory(paths.quarantine)
+            manifest["status"] = "purge_incomplete"
+            manifest["purge_interrupted_at"] = iso()
+            write_manifest(original, manifest)
+    locations = [*iter_tasks(paths)]
+    locations.extend(
+        entry
+        for entry in paths.quarantine.iterdir()
+        if entry.is_dir() and not entry.is_symlink()
+    )
+    root = paths.root.resolve()
+    quarantine = paths.quarantine.resolve()
+    for location in locations:
+        try:
+            manifest = load_manifest(location)
+        except (LifecycleError, OSError, TypeError, ValueError):
+            continue
+        transition = (manifest or {}).get("transition")
+        if not isinstance(manifest, dict) or not isinstance(transition, dict):
+            continue
+        task_name = str(manifest.get("name", location.name))
+        with task_lock(paths, task_name) as acquired:
+            if not acquired:
+                raise LifecycleError(f"cannot acquire task lock: {task_name}")
+            manifest = load_manifest(location)
+            transition = (manifest or {}).get("transition")
+            if not isinstance(manifest, dict) or not isinstance(transition, dict):
+                continue
+            require_writer(paths, location, manifest, lifecycle_owner(manifest))
+            source = Path(str(transition.get("source", ""))).expanduser()
+            destination = Path(str(transition.get("destination", ""))).expanduser()
+            kind = transition.get("kind")
+            valid = (
+                kind == "quarantine"
+                and source.parent.resolve() == root
+                and destination.parent.resolve() == quarantine
+            ) or (
+                kind == "restore"
+                and source.parent.resolve() == quarantine
+                and destination.parent.resolve() == root
+            )
+            canonical_location = location.resolve(strict=False)
+            canonical_endpoints = {
+                source.resolve(strict=False),
+                destination.resolve(strict=False),
+            }
+            if not valid or canonical_location not in canonical_endpoints:
+                raise LifecycleError(f"invalid transition metadata in {location}")
+            if source.exists() and destination.exists():
+                raise LifecycleError(f"transition has both source and destination: {location}")
+            if source.exists():
+                execute_transition_move(source, destination, manifest)
+            elif not destination.exists():
+                raise LifecycleError(f"transition lost both source and destination: {location}")
+            else:
+                destination_stat = destination.lstat()
+                destination_manifest = load_manifest(destination)
+                if (
+                    destination_stat.st_dev != transition.get("source_device")
+                    or destination_stat.st_ino != transition.get("source_inode")
+                    or not stat.S_ISDIR(destination_stat.st_mode)
+                    or not destination_manifest
+                    or destination_manifest.get("task_instance_id")
+                    != transition.get("task_instance_id")
+                ):
+                    raise LifecycleError(
+                        f"transition destination generation does not match metadata: {destination}"
+                    )
+                finish_transition(destination, manifest)
+
+
+def reconcile_transitions(paths: Paths) -> None:
+    with manifest_location_lock(paths):
+        reconcile_transitions_locked(paths)
+
+
+def quarantine_task(paths: Paths, task: Path, manifest: dict[str, Any]) -> Path:
+    require_writer(paths, task, manifest, lifecycle_owner(manifest))
+    quarantine_id = f"{utc_now():%Y%m%dT%H%M%SZ}-{task.name}-{secrets.token_hex(3)}"
+    destination = paths.quarantine / quarantine_id
+    move_with_transition(paths, task, destination, manifest, "quarantine")
+    append_history(
+        paths,
+        {"action": "quarantine", "task": str(task), "destination": str(destination)},
+    )
+    return destination
+
+
+def restore_quarantine_entry(paths: Paths, source: Path, manifest: dict[str, Any]) -> Path:
+    if source.is_symlink() or source.resolve().parent != paths.quarantine.resolve():
+        raise LifecycleError(f"invalid quarantine source: {source}")
+    destination = Path(str(manifest.get("original_path", ""))).expanduser()
+    if destination.exists() or destination.parent.resolve() != paths.root.resolve():
+        raise LifecycleError(f"cannot restore to original path: {destination}")
+    require_writer(paths, source, manifest, lifecycle_owner(manifest))
+    move_with_transition(paths, source, destination, manifest, "restore")
+    append_history(paths, {"action": "restore", "source": str(source), "task": str(destination)})
+    return destination
+
+
+def purge_quarantine_entry(
+    paths: Paths,
+    config: dict[str, Any],
+    entry: Path,
+    manifest: dict[str, Any],
+    dry_run: bool,
+) -> dict[str, str] | None:
+    minimum_age = dt.timedelta(days=float(config["quarantine_days"]))
+    pending_age = dt.timedelta(hours=float(config["purge_pending_hours"]))
+    quarantined_at = parse_time(manifest.get("quarantined_at"))
+    status = manifest.get("status")
+    if status not in {"quarantined", "purge_pending"} or not quarantined_at:
+        return None
+    if utc_now() - quarantined_at < minimum_age:
+        return None
+    candidate = {"id": entry.name, "path": str(entry)}
+    if dry_run:
+        return candidate if not preservation_blockers(paths, config, entry, manifest) else None
+    manifest = load_manifest(entry)
+    if not manifest or manifest.get("status") not in {"quarantined", "purge_pending"}:
+        return None
+    require_writer(paths, entry, manifest, lifecycle_owner(manifest))
+    if preservation_blockers(paths, config, entry, manifest):
+        return None
+    if manifest.get("status") == "quarantined":
+        manifest["status"] = "purge_pending"
+        manifest["purge_pending_at"] = iso()
+        write_manifest(entry, manifest)
+        append_history(paths, {"action": "purge-pending", "quarantine_id": entry.name})
+        return None
+    pending_at = parse_time(manifest.get("purge_pending_at"))
+    if pending_at is None or utc_now() - pending_at < pending_age:
+        return None
+    manifest["status"] = "purging"
+    manifest["purge_started_at"] = iso()
+    write_manifest(entry, manifest)
+    if manifest.get("fingerprint") != fingerprint(entry):
+        manifest["status"] = "purge_pending"
+        manifest.pop("purge_started_at", None)
+        write_manifest(entry, manifest)
+        return None
+    if preservation_blockers(paths, config, entry, manifest):
+        manifest["status"] = "purge_pending"
+        manifest.pop("purge_started_at", None)
+        write_manifest(entry, manifest)
+        return None
+    deletion_snapshot = tree_identity_snapshot(entry)
+    tombstone = paths.quarantine / f".purging-{entry.name}"
+    entry_stat = entry.stat()
+    os.replace(entry, tombstone)
+    fsync_directory(paths.quarantine)
+    try:
+        final_blockers = recovery_path_blockers(paths, manifest.get("required_paths", []))
+        final_blockers.extend(filesystem_boundary_blockers(tombstone))
+        final_blockers.extend(process_blockers(tombstone))
+        if final_blockers:
+            raise LifecycleError(
+                "purge safety changed before deletion: " + "; ".join(final_blockers)
+            )
+        remove_tree_same_device(
+            tombstone,
+            paths.quarantine.stat().st_dev,
+            entry_stat.st_ino,
+            deletion_snapshot,
+        )
+        fsync_directory(paths.quarantine)
+    except BaseException:
+        if tombstone.exists() and not entry.exists():
+            os.replace(tombstone, entry)
+            fsync_directory(paths.quarantine)
+            manifest = load_manifest(entry) or manifest
+            manifest["status"] = "purge_incomplete"
+            manifest["purge_interrupted_at"] = iso()
+            write_manifest(entry, manifest)
+        raise
+    if isinstance(manifest.get("compaction"), dict):
+        package = manifest["compaction"].get("recovery_package")
+        task_instance_id = (
+            str(package.get("task_instance_id", "")) if isinstance(package, dict) else ""
+        )
+        release_recovery_reference(paths, task_instance_id, "task-purged")
+    append_history(paths, {"action": "purge", "quarantine_id": entry.name})
+    return candidate
+
+
+def purge_quarantine(paths: Paths, config: dict[str, Any], dry_run: bool) -> list[dict[str, str]]:
+    purged: list[dict[str, str]] = []
+    limit = int(config["max_purge_per_run"])
+    for entry in sorted(paths.quarantine.iterdir(), key=lambda item: item.name):
+        if len(purged) >= limit or entry.is_symlink() or not entry.is_dir():
+            continue
+        manifest = load_manifest(entry)
+        if not manifest:
+            continue
+        if dry_run:
+            candidate = purge_quarantine_entry(paths, config, entry, manifest, True)
+            if candidate:
+                purged.append(candidate)
+            continue
+        task_name = str(manifest.get("name", ""))
+        drain_pending_hooks(paths, config)
+        with task_lock(paths, task_name, blocking=False) as acquired:
+            if not acquired:
+                continue
+            manifest = load_manifest(entry)
+            if not manifest:
+                continue
+            if purge_quarantine_entry(paths, config, entry, manifest, True) is None:
+                continue
+        drain_pending_hooks(paths, config)
+        with hook_ingress_fence(paths) as hooks_quiet:
+            if not hooks_quiet:
+                continue
+            with task_lock(paths, task_name, blocking=False) as acquired:
+                if not acquired or not entry.exists():
+                    continue
+                manifest = load_manifest(entry)
+                if not manifest:
+                    continue
+                candidate = purge_quarantine_entry(paths, config, entry, manifest, False)
+                if candidate:
+                    purged.append(candidate)
+    return purged
+
+
+def sweep_task(
+    paths: Paths,
+    config: dict[str, Any],
+    task: Path,
+    *,
+    dry_run: bool,
+    allow_quarantine: bool,
+) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
+    with task_lock(paths, task.name, blocking=False) as acquired:
+        if not acquired:
+            return (
+                {"task": str(task), "eligible": False, "blockers": ["task is busy"]},
+                None,
+            )
+        try:
+            manifest = load_manifest(task)
+        except (LifecycleError, OSError, TypeError, ValueError) as exc:
+            return (
+                {"task": str(task), "eligible": False, "blockers": [str(exc)]},
+                None,
+            )
+        if not manifest or manifest.get("status") != "complete":
+            return None, None
+        if config["lifecycle_mode"] == "shadow" and lifecycle_owner(manifest) == "v2":
+            return (
+                {
+                    "task": str(task),
+                    "eligible": False,
+                    "blockers": ["v2 task frozen by shadow rollback"],
+                },
+                None,
+            )
+        try:
+            require_writer(paths, task, manifest, lifecycle_owner(manifest))
+        except LifecycleError as exc:
+            return (
+                {"task": str(task), "eligible": False, "blockers": [str(exc)]},
+                None,
+            )
+        blockers = eligibility(paths, config, task, manifest)
+        checked = {"task": str(task), "eligible": not blockers, "blockers": blockers}
+        if blockers or not allow_quarantine:
+            return checked, None
+        if dry_run:
+            return checked, {"task": str(task), "destination": "dry-run"}
+    drain_pending_hooks(paths, config)
+    with task_lock(paths, task.name, blocking=False) as acquired:
+        if not acquired:
+            return (
+                {"task": str(task), "eligible": False, "blockers": ["task became busy"]},
+                None,
+            )
+        if not task.exists():
+            return checked, None
+        manifest = load_manifest(task)
+        if not manifest or manifest.get("status") != "complete":
+            return checked, None
+        blockers = eligibility(paths, config, task, manifest)
+        if blockers:
+            checked = {"task": str(task), "eligible": False, "blockers": blockers}
+            return checked, None
+        destination = quarantine_task(paths, task, manifest)
+        return checked, {"task": str(task), "destination": str(destination)}
+
+
+def command_sweep(
+    args: argparse.Namespace, paths: Paths, config: dict[str, Any]
+) -> dict[str, Any]:
+    adopted = [] if args.dry_run else adopt_unmanaged(paths, config)
+    ownership = {"created": [], "blocked": []}
+    if not args.dry_run:
+        ownership = backfill_ownership_records(paths)
+    lock_path = paths.state / "sweep.lock"
+    lock_path.touch(mode=0o600, exist_ok=True)
+    with lock_path.open("r+", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return {
+                "ownership": ownership,
+                "adopted": adopted,
+                "skipped": "another sweep is running",
+            }
+        checked: list[dict[str, Any]] = []
+        quarantined: list[dict[str, str]] = []
+        limit = int(config["max_quarantine_per_run"])
+        for task in iter_tasks(paths):
+            task_check, task_quarantine = sweep_task(
+                paths,
+                config,
+                task,
+                dry_run=args.dry_run,
+                allow_quarantine=len(quarantined) < limit,
+            )
+            if task_check:
+                checked.append(task_check)
+            if task_quarantine:
+                quarantined.append(task_quarantine)
+        purged = purge_quarantine(paths, config, args.dry_run)
+        if not args.dry_run:
+            atomic_json(paths.state / "last-sweep.json", {"at": iso(), "dry_run": False})
+        return {
+            "ownership": ownership,
+            "adopted": adopted,
+            "checked": checked,
+            "quarantined": quarantined,
+            "purged": purged,
+        }
+
+
+def command_inventory(
+    paths: Paths, config: dict[str, Any], *, refresh_capacity: bool = False
+) -> dict[str, Any]:
+    counts = {"active": 0, "keep": 0, "complete": 0, "unmanaged": 0}
+    tasks: list[dict[str, str]] = []
+    orphan_active: list[str] = []
+    compact_pending: list[str] = []
+    orphan_after = dt.timedelta(hours=float(config["orphan_active_hours"]))
+    now = utc_now()
+    for task in iter_tasks(paths):
+        manifest = load_manifest(task)
+        status = str(manifest.get("status")) if manifest else "unmanaged"
+        counts[status] = counts.get(status, 0) + 1
+        tasks.append(
+            {
+                "name": task.name,
+                "status": status,
+                "path": str(task),
+                "budget": (manifest or {}).get("budget"),
+            }
+        )
+        compaction = (manifest or {}).get("compaction")
+        if isinstance(compaction, dict) and compaction.get("status") in {
+            "pending",
+            "compacting",
+            "compact_incomplete",
+        }:
+            compact_pending.append(task.name)
+        if (
+            manifest
+            and status == "active"
+            and manifest.get("adoption_source") == "automatic"
+        ):
+            created_at = parse_time(manifest.get("created_at"))
+            if created_at and now - created_at >= orphan_after:
+                orphan_active.append(task.name)
+    quarantined = sum(1 for item in paths.quarantine.iterdir() if item.is_dir())
+    capacity = capacity_snapshot(paths, config, refresh_allocated=refresh_capacity)
+    reservations = reservation_snapshot(paths)
+    return {
+        "root": str(paths.root),
+        "counts": counts,
+        "capacity": capacity,
+        "reservations": reservations,
+        "quarantined": quarantined,
+        "orphan_active": {"count": len(orphan_active), "tasks": orphan_active},
+        "compact_pending": {"count": len(compact_pending), "tasks": compact_pending},
+        "tasks": tasks,
+    }
+
+
+def command_restore(args: argparse.Namespace, paths: Paths) -> dict[str, Any]:
+    matches = [
+        entry
+        for entry in paths.quarantine.iterdir()
+        if not entry.is_symlink()
+        and entry.is_dir()
+        and (entry.name == args.value or entry.name.endswith(f"-{args.value}"))
+    ]
+    if not matches:
+        matches = [
+            entry
+            for entry in paths.quarantine.iterdir()
+            if not entry.is_symlink()
+            and entry.is_dir()
+            and (load_manifest(entry) or {}).get("name") == args.value
+        ]
+    if len(matches) != 1:
+        raise LifecycleError(f"expected one quarantine match for {args.value}, found {len(matches)}")
+    source = matches[0]
+    manifest = load_manifest(source)
+    if not manifest or manifest.get("status") not in {"quarantined", "purge_pending"}:
+        raise LifecycleError(f"invalid quarantine entry: {source}")
+    task_name = str(manifest.get("name", ""))
+    with task_lock(paths, task_name) as acquired:
+        if not acquired:
+            raise LifecycleError(f"cannot acquire task lock: {task_name}")
+        manifest = load_manifest(source)
+        if not manifest or manifest.get("status") not in {"quarantined", "purge_pending"}:
+            raise LifecycleError(f"quarantine entry changed before restore: {source}")
+        destination = restore_quarantine_entry(paths, source, manifest)
+        return {"restored": str(destination), "status": "active"}
+
+
+def read_hook_event() -> dict[str, Any]:
+    try:
+        event = json.load(sys.stdin)
+    except json.JSONDecodeError as exc:
+        raise LifecycleError(f"invalid hook JSON: {exc}") from exc
+    if not isinstance(event, dict):
+        raise LifecycleError("hook JSON must be an object")
+    return event
+
+
+def apply_hook_event(paths: Paths, config: dict[str, Any], event: dict[str, Any]) -> None:
+    session_id = str(event.get("session_id", "")).strip()
+    cwd = str(event.get("cwd", "")).strip()
+    adopt_unmanaged(paths, config, session_id or None, cwd or None)
+    if session_id:
+        sessions = load_sessions(paths)
+        sessions[session_id] = {
+            "last_seen": iso(),
+            "cwd": cwd,
+            "event": event.get("hook_event_name"),
+        }
+        atomic_json(paths.state / "sessions.json", sessions)
+        task = task_for_cwd(paths, cwd)
+        if task is None and cwd:
+            normalized_cwd = Path(os.path.abspath(os.path.expanduser(cwd))).resolve(strict=False)
+            matches: list[tuple[Path, dict[str, Any]]] = []
+            for entry in paths.quarantine.iterdir():
+                if entry.is_symlink() or not entry.is_dir():
+                    continue
+                manifest = load_manifest(entry)
+                original = Path(str((manifest or {}).get("original_path", ""))).expanduser()
+                if not original.is_absolute():
+                    continue
+                try:
+                    normalized_cwd.relative_to(original.resolve(strict=False))
+                except (ValueError, TypeError):
+                    continue
+                if manifest and manifest.get("status") in {"quarantined", "purge_pending"}:
+                    matches.append((entry, manifest))
+            if len(matches) == 1:
+                entry, manifest = matches[0]
+                task_name = str(manifest.get("name", ""))
+                with task_lock(paths, task_name) as acquired:
+                    if not acquired:
+                        raise LifecycleError(f"cannot acquire task lock: {task_name}")
+                    manifest = load_manifest(entry)
+                    if not manifest or manifest.get("status") not in {
+                        "quarantined",
+                        "purge_pending",
+                    }:
+                        return
+                    if session_id not in manifest["owner_session_ids"]:
+                        manifest["owner_session_ids"].append(session_id)
+                        write_manifest(entry, manifest)
+                    task = restore_quarantine_entry(paths, entry, manifest)
+        if task:
+            with task_lock(paths, task.name) as acquired:
+                if not acquired:
+                    raise LifecycleError(f"cannot acquire task lock: {task.name}")
+                manifest = load_manifest(task)
+                if manifest is None:
+                    manifest = new_manifest(
+                        task,
+                        session_id,
+                        owner=configured_new_owner(config),
+                        config=config,
+                    )
+                    with ownership_lock(paths):
+                        write_ownership_record(paths, task, manifest)
+                else:
+                    require_writer(paths, task, manifest, lifecycle_owner(manifest))
+                if session_id not in manifest["owner_session_ids"]:
+                    manifest["owner_session_ids"].append(session_id)
+                if manifest.get("status") == "quarantined":
+                    raise LifecycleError(f"session cwd points into quarantined task: {task}")
+                apply_event_lease(
+                    manifest,
+                    config,
+                    str(event.get("hook_event_name", "")),
+                    session_id,
+                )
+                write_manifest(task, manifest)
+
+
+def queue_hook_event(paths: Paths, event: dict[str, Any]) -> str:
+    normalized = {
+        "session_id": str(event.get("session_id", "")).strip(),
+        "cwd": str(event.get("cwd", "")).strip(),
+        "hook_event_name": str(event.get("hook_event_name", "")).strip(),
+        "observed_at": iso(),
+        "internal_event_id": secrets.token_hex(16),
+    }
+    with hook_queue_lock(paths):
+        pending = paths.state / "pending-hooks"
+        pending.mkdir(parents=True, exist_ok=True, mode=0o700)
+        event_path = pending / f"{time.time_ns()}-{os.getpid()}-{secrets.token_hex(3)}.json"
+        atomic_json(event_path, normalized)
+    return normalized["internal_event_id"]
+
+
+def drain_pending_hooks(paths: Paths, config: dict[str, Any]) -> None:
+    with hook_drain_lock(paths):
+        with hook_queue_lock(paths):
+            pending = paths.state / "pending-hooks"
+            pending.mkdir(parents=True, exist_ok=True, mode=0o700)
+            if any(pending.glob("*.json")):
+                sealed = paths.state / f"pending-hooks-draining-{time.time_ns()}-{secrets.token_hex(3)}"
+                os.replace(pending, sealed)
+                pending.mkdir(mode=0o700)
+                fsync_directory(paths.state)
+        sealed_directories = sorted(paths.state.glob("pending-hooks-draining-*"))
+        for sealed in sealed_directories:
+            if not sealed.is_dir() or sealed.is_symlink():
+                raise LifecycleError(f"invalid sealed hook queue: {sealed}")
+            for event_path in sorted(sealed.glob("*.json")):
+                event = load_json(event_path, None)
+                if not isinstance(event, dict):
+                    raise LifecycleError(f"invalid pending hook event: {event_path}")
+                apply_hook_event(paths, config, event)
+                event_path.unlink(missing_ok=True)
+                fsync_directory(sealed)
+            sealed.rmdir()
+            fsync_directory(paths.state)
+
+
+def clean_completed_task_outputs(
+    paths: Paths, config: dict[str, Any]
+) -> list[dict[str, Any]]:
+    cleaned: list[dict[str, Any]] = []
+    limit = int(config["max_output_cleanup_per_run"])
+    for task in iter_tasks(paths):
+        if len(cleaned) >= limit:
+            break
+        with task_lock(paths, task.name, blocking=False) as acquired:
+            if not acquired:
+                continue
+            try:
+                manifest = load_manifest(task)
+            except (LifecycleError, OSError, TypeError, ValueError) as exc:
+                cleaned.append(
+                    {
+                        "task": str(task),
+                        "scratch": None,
+                        "outputs": [],
+                        "output_blockers": [
+                            {"path": str(task), "reason": str(exc)}
+                        ],
+                    }
+                )
+                continue
+            if not manifest or manifest.get("status") != "complete":
+                continue
+            if lifecycle_owner(manifest) != "legacy":
+                continue
+            require_writer(paths, task, manifest, "legacy")
+            task_result: dict[str, Any] = {"task": str(task), "scratch": None, "outputs": []}
+            try:
+                task_result["scratch"] = clean_fenced_scratch(paths, task, manifest)
+                manifest = load_manifest(task) or manifest
+            except LifecycleError as exc:
+                task_result["scratch_blocker"] = str(exc)
+            output_result = clean_reproducible_outputs(paths, task, manifest)
+            task_result["outputs"] = output_result["cleaned"]
+            if output_result["blocked"]:
+                task_result["output_blockers"] = output_result["blocked"]
+            if (
+                task_result["scratch"]
+                or task_result["outputs"]
+                or task_result.get("scratch_blocker")
+                or task_result.get("output_blockers")
+            ):
+                cleaned.append(task_result)
+    return cleaned
+
+
+def command_maintenance(paths: Paths, config: dict[str, Any]) -> dict[str, Any]:
+    with dispatcher_lock(paths) as acquired:
+        if not acquired:
+            return {"skipped": "another dispatcher is running"}
+        with lifecycle_lock(paths) as state_acquired:
+            if not state_acquired:
+                return {"skipped": "lifecycle state is busy"}
+            ownership = backfill_ownership_records(paths)
+            reconcile_transitions(paths)
+            reconcile_recovery_store(paths)
+            drain_pending_hooks(paths, config)
+        adopted = adopt_unmanaged(paths, config)
+        v2_reconcile = reconcile_v2_tasks(paths, config)
+        output_cleanup = clean_completed_task_outputs(paths, config)
+        compaction = compact_completed_tasks(paths, config)
+        last = load_json(paths.state / "last-sweep.json", {})
+        last_at = parse_time(last.get("at") if isinstance(last, dict) else None)
+        interval = dt.timedelta(hours=float(config["sweep_interval_hours"]))
+        sweep = None
+        if last_at is None or utc_now() - last_at >= interval:
+            sweep = command_sweep(argparse.Namespace(dry_run=False), paths, config)
+        recovery_gc = gc_recovery_store(paths, config, dry_run=False)
+        capacity = capacity_snapshot(
+            paths, config, refresh_allocated=not bool(load_capacity_cache(paths, config))
+        )
+        return {
+            "ownership": ownership,
+            "adopted": adopted,
+            "v2_reconcile": v2_reconcile,
+            "output_cleanup": output_cleanup,
+            "compaction": compaction,
+            "sweep": sweep,
+            "recovery_gc": recovery_gc,
+            "capacity": capacity,
+        }
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Protect, quarantine, restore, and eventually purge persistent Codex task workspaces."
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+    create = sub.add_parser("create", help="create a managed active task directory")
+    create.add_argument("name")
+    create.add_argument("--session-id")
+    create.add_argument(
+        "--budget-class", choices=("default", "large", "exceptional"), default="default"
+    )
+    create.add_argument("--expected-peak-gib", type=float)
+    for status in ("active", "keep", "complete"):
+        mark = sub.add_parser(status, help=f"mark a task {status}")
+        mark.add_argument("task")
+        mark.add_argument("--session-id")
+        mark.add_argument("--depends-on", action="append", default=[])
+        mark.add_argument("--note")
+        mark.set_defaults(status=status)
+    check = sub.add_parser("check", help="show why a task is or is not eligible")
+    check.add_argument("task")
+    refresh_fingerprint = sub.add_parser(
+        "refresh-fingerprint",
+        help="explicitly upgrade a matching legacy completed-task fingerprint to SHA-256",
+    )
+    refresh_fingerprint.add_argument("task")
+    compact = sub.add_parser(
+        "compact", help="queue safe background replacement of a completed task with a recovery stub"
+    )
+    compact.add_argument("task")
+    compact.add_argument("--depends-on", action="append", required=True)
+    compact.add_argument(
+        "--checkpoint",
+        action="append",
+        default=[],
+        help="task-relative file or directory to preserve in the managed recovery package",
+    )
+    compact.add_argument("--note", required=True)
+    migrate_legacy = sub.add_parser(
+        "migrate-legacy-compaction",
+        help="attach a managed recovery package to an interrupted pre-package compaction",
+    )
+    migrate_legacy.add_argument("task")
+    adopt = sub.add_parser("adopt", help="mark newly created unmanaged tasks active")
+    adopt.add_argument("--quiet", action="store_true")
+    sweep = sub.add_parser("sweep", help="quarantine eligible tasks and purge expired quarantine")
+    sweep.add_argument("--dry-run", action="store_true")
+    sweep.add_argument("--quiet", action="store_true")
+    inventory = sub.add_parser("inventory", help="list managed and unmanaged task directories")
+    inventory.add_argument("--refresh", action="store_true")
+    status = sub.add_parser(
+        "status", help="show the simplified in-use, settling, recoverable, or blocked state"
+    )
+    status.add_argument("task", nargs="?")
+    hold = sub.add_parser("hold", help="place or clear a bounded hold on a task checkpoint")
+    hold.add_argument("task")
+    hold.add_argument("--until")
+    hold.add_argument("--reason")
+    hold.add_argument("--clear", action="store_true")
+    maintenance = sub.add_parser("maintenance", help="adopt new tasks and run a throttled sweep")
+    maintenance.add_argument("--quiet", action="store_true")
+    restore = sub.add_parser("restore", help="restore one quarantined task by id or task name")
+    restore.add_argument("value")
+    release = sub.add_parser(
+        "release-checkpoint", help="release a compacted task's managed recovery reference"
+    )
+    release.add_argument("task")
+    recovery_gc = sub.add_parser("recovery-gc", help="purge expired zero-reference checkpoints")
+    recovery_gc.add_argument("--dry-run", action="store_true")
+    scratch_acquire = sub.add_parser("scratch-acquire", help="acquire a fenced scratch writer")
+    scratch_acquire.add_argument("task")
+    scratch_acquire.add_argument("--session-id")
+    scratch_check = sub.add_parser("scratch-check", help="validate a scratch fencing token")
+    scratch_check.add_argument("task")
+    scratch_check.add_argument("--token", required=True)
+    scratch_release = sub.add_parser("scratch-release", help="release a scratch fencing token")
+    scratch_release.add_argument("task")
+    scratch_release.add_argument("--token", required=True)
+    scratch_clean = sub.add_parser("scratch-clean", help="remove an unleased fenced scratch generation")
+    scratch_clean.add_argument("task")
+    scratch_clean.add_argument("--allow-active", action="store_true")
+    clean_outputs = sub.add_parser(
+        "clean-reproducible", help="remove target and node_modules from a completed task"
+    )
+    clean_outputs.add_argument("task")
+    sub.add_parser("hook", help=argparse.SUPPRESS)
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    paths = Paths()
+    try:
+        paths.prepare()
+        config = load_config(paths)
+        create_startup_warnings: list[str] = []
+        if args.command == "hook":
+            event = read_hook_event()
+            event_id = queue_hook_event(paths, event)
+            result = {"queued": True, "event_id": event_id}
+        else:
+            dry_run = args.command == "sweep" and args.dry_run
+            if not dry_run and args.command != "maintenance":
+                with lifecycle_lock(paths) as acquired:
+                    if not acquired:
+                        raise LifecycleError("cannot acquire lifecycle state lock")
+                    try:
+                        backfill_ownership_records(paths)
+                        reconcile_transitions(paths)
+                        reconcile_recovery_store(paths)
+                    except (LifecycleError, OSError, TypeError, ValueError) as exc:
+                        if args.command != "create":
+                            raise
+                        create_startup_warnings.append(
+                            f"lifecycle reconciliation incomplete: {exc}"
+                        )
+            if args.command == "create":
+                result = command_create(args, paths, config)
+                result["admission_warnings"] = (
+                    create_startup_warnings + result["admission_warnings"]
+                )
+            elif args.command in {"active", "keep", "complete"}:
+                result = command_mark(args, paths, config)
+            elif args.command == "check":
+                result = command_check(args, paths, config)
+            elif args.command == "refresh-fingerprint":
+                result = command_refresh_fingerprint(args, paths)
+            elif args.command == "compact":
+                result = command_compact(args, paths, config)
+            elif args.command == "migrate-legacy-compaction":
+                result = command_migrate_legacy_compaction(args, paths, config)
+            elif args.command == "adopt":
+                result = command_adopt(paths, config)
+            elif args.command == "sweep":
+                result = command_sweep(args, paths, config)
+            elif args.command == "inventory":
+                result = command_inventory(paths, config, refresh_capacity=args.refresh)
+            elif args.command == "status":
+                result = command_status(args, paths)
+            elif args.command == "hold":
+                result = command_hold(args, paths, config)
+            elif args.command == "maintenance":
+                result = command_maintenance(paths, config)
+            elif args.command == "restore":
+                result = command_restore(args, paths)
+            elif args.command == "release-checkpoint":
+                result = command_release_checkpoint(args, paths)
+            elif args.command == "recovery-gc":
+                result = command_recovery_gc(args, paths, config)
+            elif args.command == "scratch-acquire":
+                result = command_scratch_acquire(args, paths)
+            elif args.command == "scratch-check":
+                result = command_scratch_check(args, paths)
+            elif args.command == "scratch-release":
+                result = command_scratch_release(args, paths)
+            elif args.command == "scratch-clean":
+                result = command_scratch_clean(args, paths)
+            elif args.command == "clean-reproducible":
+                result = command_clean_reproducible(args, paths)
+            else:
+                parser.error(f"unknown command: {args.command}")
+                return 2
+    except LifecycleError as exc:
+        print(f"codex-tmp: {exc}", file=sys.stderr)
+        return 1
+    if not getattr(args, "quiet", False) and result:
+        print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
