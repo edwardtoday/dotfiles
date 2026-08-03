@@ -5,6 +5,7 @@
 - `AGENTS.md` 现在只保留全局基线规则，安装脚本会将它软链接为 `~/.AGENTS.md`；低频、专题化规则拆分存放在 `AGENTS.d/`，`~/.codex/AGENTS.md` 等入口文件会统一指向同一套规则。
 - 维护规则时，优先把高频、稳定、跨项目的内容放进 `AGENTS.md`，把长篇、专题化或项目特例放进 `AGENTS.d/` 或项目级 `AGENTS.md`；GitLab / MR 约定详见 `AGENTS.d/gitlab.md`。
 - 技术指南存放于 `docs/tech-guides/`，默认优先读取本地文件；仅在需要跨仓库引用或外部访问时，再使用对应的 Raw 链接。
+- 跨轮次任务制品使用 `codex-tmp create <task>` 建在持久化的 `~/.codex/tmp`。任务完成后由 `codex-tmp complete <task>` 进入受保护的后台回收流程；已完成且可从 T7、远端或外置 evidence 恢复的大任务，可显式用 `codex-tmp compact` 排队，在短宽限后后台替换为 recovery stub，提前释放主体空间。未托管、活跃、保留、dirty Git、linked worktree 或内容变化的目录不会自动移动。使用 `codex-tmp inventory` 查看状态，使用 `codex-tmp restore <id-or-name>` 从 14 天隔离窗口恢复。
 
 ## Installation
 
@@ -23,6 +24,18 @@ To update, `cd` into your local `dotfiles` repository and then:
 ```
 
 If a target dot-directory already exists as a real directory instead of a symlink, the installer leaves it in place and prints a skip message so you can migrate it manually.
+
+### Agent skills
+
+`~/.agents/skills` is managed as a link farm. Personal skills are checked out from the private repository declared in [`agents/skills.yml`](agents/skills.yml); third-party skills are cloned from pinned upstream Git revisions, so their source is not copied into the personal repository. `./install.rb` runs the safe restore automatically.
+
+```bash
+./bin/agents-skills-restore --dry-run
+./bin/agents-skills-restore --adopt
+./bin/agents-skills-audit
+```
+
+`--adopt` replaces only a real skill directory that is byte-for-byte identical to its declared source, moving the old directory to `~/.agents/backups/` first. Any other existing skill is left unchanged and reported as drift. Entries marked `unclassified_runtime_skills` require upstream provenance before the restore script will manage them.
 
 ### Ghostty
 
@@ -86,6 +99,14 @@ When setting up a new Mac, you may want to install some common [Homebrew](http:/
 ```bash
 brew bundle ~/.Brewfile
 ```
+
+### Rebuild an excluded developer environment
+
+Time Machine intentionally excludes package-manager installations, language caches,
+virtual environments, Xcode, and MacTeX that can be recreated from versioned
+manifests. Follow [`docs/environment-rebuild.md`](docs/environment-rebuild.md) after
+restoring this repository. The canonical Homebrew inventory remains `Brewfile`, and
+Conda/tool manifests live under `docs/rebuild/`.
 
 ### Install native apps with `brew cask`
 

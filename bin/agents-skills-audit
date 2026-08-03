@@ -1,0 +1,41 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'pathname'
+require 'yaml'
+
+repo_root = File.expand_path('..', __dir__)
+config = YAML.load_file(File.join(repo_root, 'agents', 'skills.yml'))
+home = Dir.home
+expand = ->(value) { File.expand_path(value.sub(%r{\A~}, home)) }
+runtime_root = expand.call(config.fetch('runtime_root'))
+state_root = expand.call(config.fetch('state_root'))
+expected = {}
+personal = config.fetch('personal')
+personal.fetch('skills').each { |name| expected[name] = File.join(state_root, 'personal', personal.fetch('source_subdir'), name) }
+config.fetch('external_links').each { |entry| expected[entry.fetch('name')] = File.join(state_root, 'sources', entry.fetch('source'), entry.fetch('path')) }
+
+errors = []
+expected.each do |name, source|
+  target = File.join(runtime_root, name)
+  errors << "missing source SKILL.md: #{source}" unless File.file?(File.join(source, 'SKILL.md'))
+  errors << "missing runtime skill: #{target}" unless File.exist?(target)
+  if File.symlink?(target)
+    errors << "wrong link for #{name}: #{File.readlink(target)}" unless File.realpath(target) == File.realpath(source)
+  else
+    errors << "runtime skill is not managed symlink: #{target}"
+  end
+end
+
+unclassified = config.fetch('unclassified_runtime_skills')
+unclassified.each do |name|
+  target = File.join(runtime_root, name)
+  errors << "unclassified runtime skill needs provenance: #{name}" if File.exist?(target)
+end
+
+if errors.empty?
+  puts "managed skills: #{expected.length}; no managed-link drift"
+  exit 0
+end
+warn errors.join("\n")
+exit 1
