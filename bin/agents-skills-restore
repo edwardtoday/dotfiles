@@ -36,7 +36,8 @@ def ensure_checkout(name:, repository:, revision:, root:, dry_run:)
   else
     run!('git', 'clone', '--quiet', repository, target, dry_run: dry_run)
   end
-  run!('git', '-C', target, 'checkout', '--quiet', '--detach', revision, dry_run: dry_run) if revision
+  checkout_ref = revision&.match?(/\A[[:alnum:]_.\/-]+\z/) && !revision.match?(/\A[0-9a-f]{40}\z/) ? "origin/#{revision}" : revision
+  run!('git', '-C', target, 'checkout', '--quiet', '--detach', checkout_ref, dry_run: dry_run) if checkout_ref
   target
 end
 
