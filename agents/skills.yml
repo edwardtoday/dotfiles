@@ -1,0 +1,85 @@
+version: 1
+
+# `~/.agents/skills` is a link farm. Personal skills live in the private Git
+# repository; third-party skills remain sourced from their upstream projects.
+runtime_root: ~/.agents/skills
+state_root: ~/.local/share/agent-skills
+personal:
+  repository: https://github.com/edwardtoday/agent-skills-private.git
+  ref: main
+  source_subdir: skills
+  skills:
+    - advance-my-gitlab-mrs
+    - generate-images-via-providers
+    - gitlab-ci-pipeline-optimization
+    - gitlab-pipeline-failure-triage
+    - gitlab-wiki-export
+    - markdown-report-pdf
+    - obsidian-meeting-filename-normalizer
+    - strategy-research-report
+    - web-to-obsidian-note
+    - youtube-to-obsidian-note
+
+sources:
+  mattpocock:
+    repository: https://github.com/mattpocock/skills.git
+    revision: 2ab958093e83e0ec752e6c1c5932da465bf23e0c
+  vercel-labs:
+    repository: https://github.com/vercel-labs/skills.git
+    revision: 1164afa5f0e21ebd01e6fc11249759353f494ad1
+  remotion-dev:
+    repository: https://github.com/remotion-dev/skills.git
+    revision: f94c1e18db2bb30b904784b986f6897822b8f152
+  ningzimu:
+    repository: https://github.com/ningzimu/codex-ppt-skill.git
+    revision: f2ed80372f65bb05fe62dd07979b239a17ac065d
+  op7418:
+    repository: https://github.com/op7418/guizang-ppt-skill.git
+    revision: 929c2ecb63a22b54d400c4911ed70bf96c2b355d
+  openai-skills:
+    repository: https://github.com/openai/skills.git
+    revision: 49f948faa9258a0c61caceaf225e179651397431
+
+external_links:
+  - { name: code-review, source: mattpocock, path: skills/engineering/code-review }
+  - { name: codebase-design, source: mattpocock, path: skills/engineering/codebase-design }
+  - { name: diagnosing-bugs, source: mattpocock, path: skills/engineering/diagnosing-bugs }
+  - { name: domain-modeling, source: mattpocock, path: skills/engineering/domain-modeling }
+  - { name: grill-me, source: mattpocock, path: skills/productivity/grill-me }
+  - { name: grill-with-docs, source: mattpocock, path: skills/engineering/grill-with-docs }
+  - { name: grilling, source: mattpocock, path: skills/productivity/grilling }
+  - { name: handoff, source: mattpocock, path: skills/productivity/handoff }
+  - { name: implement, source: mattpocock, path: skills/engineering/implement }
+  - { name: improve-codebase-architecture, source: mattpocock, path: skills/engineering/improve-codebase-architecture }
+  - { name: research, source: mattpocock, path: skills/engineering/research }
+  - { name: resolving-merge-conflicts, source: mattpocock, path: skills/engineering/resolving-merge-conflicts }
+  - { name: tdd, source: mattpocock, path: skills/engineering/tdd }
+  - { name: teach, source: mattpocock, path: skills/productivity/teach }
+  - { name: to-spec, source: mattpocock, path: skills/engineering/to-spec }
+  - { name: to-tickets, source: mattpocock, path: skills/engineering/to-tickets }
+  - { name: wayfinder, source: mattpocock, path: skills/engineering/wayfinder }
+  - { name: writing-great-skills, source: mattpocock, path: skills/productivity/writing-great-skills }
+  - { name: find-skills, source: vercel-labs, path: skills/find-skills }
+  - { name: remotion-best-practices, source: remotion-dev, path: skills/remotion-best-practices }
+  - { name: codex-ppt, source: ningzimu, path: skills/codex-ppt }
+  - { name: guizang-ppt-skill, source: op7418, path: . }
+  - { name: cloudflare-deploy, source: openai-skills, path: skills/.curated/cloudflare-deploy }
+  - { name: security-threat-model, source: openai-skills, path: skills/.curated/security-threat-model }
+
+# These are retained installer records, not mounted skills. `npx skills` owns
+# their installation and lock state; do not vendor their content here.
+installer_lock: ~/.agents/.skill-lock.json
+unclassified_runtime_skills:
+  - frontend-skill
+  - go-dev
+  - internal-comms
+  - jupyter-notebook
+  - officecli
+  - ops-safety
+  - python-dev
+  - react-best-practices
+  - security-threat-model
+  - speech
+  - theme-factory
+  - transcribe
+  - video-production-orchestrator

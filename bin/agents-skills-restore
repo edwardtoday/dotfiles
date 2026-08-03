@@ -1,0 +1,93 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'fileutils'
+require 'optparse'
+require 'pathname'
+require 'yaml'
+
+options = { adopt: false, dry_run: false }
+OptionParser.new do |parser|
+  parser.banner = 'Usage: agents-skills-restore [--adopt] [--dry-run]'
+  parser.on('--adopt', 'Replace identical real directories with managed symlinks') { options[:adopt] = true }
+  parser.on('--dry-run', 'Report without writing') { options[:dry_run] = true }
+end.parse!
+
+repo_root = File.expand_path('..', __dir__)
+config = YAML.load_file(File.join(repo_root, 'agents', 'skills.yml'))
+home = Dir.home
+expand = ->(value) { File.expand_path(value.sub(%r{\A~}, home)) }
+runtime_root = expand.call(config.fetch('runtime_root'))
+state_root = expand.call(config.fetch('state_root'))
+backup_root = File.join(home, '.agents', 'backups', "adopted-#{Time.now.strftime('%Y%m%d%H%M%S')}")
+
+def run!(*command, dry_run: false)
+  puts "+ #{command.join(' ')}"
+  return if dry_run
+
+  system(*command) || abort("failed: #{command.join(' ')}")
+end
+
+def ensure_checkout(name:, repository:, revision:, root:, dry_run:)
+  target = File.join(root, name)
+  FileUtils.mkdir_p(File.dirname(target)) unless dry_run
+  if File.directory?(File.join(target, '.git'))
+    run!('git', '-C', target, 'fetch', '--quiet', 'origin', dry_run: dry_run)
+  else
+    run!('git', 'clone', '--quiet', repository, target, dry_run: dry_run)
+  end
+  run!('git', '-C', target, 'checkout', '--quiet', '--detach', revision, dry_run: dry_run) if revision
+  target
+end
+
+def equivalent_directory?(left, right)
+  system('diff', '-qr', '--exclude=.DS_Store', '--exclude=__pycache__', '--exclude=*.pyc', left, right, out: File::NULL, err: File::NULL)
+end
+
+def link_skill(name:, source:, runtime_root:, adopt:, backup_root:, dry_run:)
+  unless dry_run || File.file?(File.join(source, 'SKILL.md'))
+    abort("missing SKILL.md for #{name}: #{source}")
+  end
+  target = File.join(runtime_root, name)
+  if File.symlink?(target)
+    return if !dry_run && File.realpath(target) == File.realpath(source)
+    if dry_run
+      puts "[link] #{target} -> #{source}"
+      return
+    end
+    puts "[drift] #{target} links to #{File.readlink(target)}; refusing to replace"
+    return
+  end
+  if File.exist?(target)
+    unless adopt && File.directory?(target) && equivalent_directory?(target, source)
+      puts "[drift] #{target} is a real directory; refusing to replace (use --adopt only after content comparison)"
+      return
+    end
+    destination = File.join(backup_root, name)
+    puts "[adopt] #{target} -> backup #{destination} -> #{source}"
+    unless dry_run
+      FileUtils.mkdir_p(File.dirname(destination))
+      FileUtils.mv(target, destination)
+    end
+  else
+    puts "[link] #{target} -> #{source}"
+  end
+  return if dry_run
+
+  FileUtils.mkdir_p(runtime_root)
+  FileUtils.ln_s(source, target)
+end
+
+FileUtils.mkdir_p(state_root) unless options[:dry_run]
+personal = config.fetch('personal')
+personal_root = ensure_checkout(name: 'personal', repository: personal.fetch('repository'), revision: personal.fetch('ref'), root: state_root, dry_run: options[:dry_run])
+personal.fetch('skills').each do |name|
+  link_skill(name: name, source: File.join(personal_root, personal.fetch('source_subdir'), name), runtime_root: runtime_root, adopt: options[:adopt], backup_root: backup_root, dry_run: options[:dry_run])
+end
+
+source_roots = config.fetch('sources').to_h do |name, source|
+  [name, ensure_checkout(name: name, repository: source.fetch('repository'), revision: source.fetch('revision'), root: File.join(state_root, 'sources'), dry_run: options[:dry_run])]
+end
+config.fetch('external_links').each do |entry|
+  link_skill(name: entry.fetch('name'), source: File.join(source_roots.fetch(entry.fetch('source')), entry.fetch('path')), runtime_root: runtime_root, adopt: options[:adopt], backup_root: backup_root, dry_run: options[:dry_run])
+end

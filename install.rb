@@ -64,3 +64,9 @@ if run_bootstrap && File.directory?(init_dir)
 elsif File.directory?(init_dir)
   puts "[install] skipping OS bootstrap scripts; run with --bootstrap or execute ~/.init/*.sh manually"
 end
+
+agents_restore = File.join(repo_root, 'bin', 'agents-skills-restore')
+if File.executable?(agents_restore)
+  puts "[install] restoring managed agent skills"
+  system(agents_restore, '--adopt') || abort('[install] managed agent skills restore failed')
+end
