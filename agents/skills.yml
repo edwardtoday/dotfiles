@@ -17,6 +17,7 @@ personal:
     - markdown-report-pdf
     - obsidian-meeting-filename-normalizer
     - strategy-research-report
+    - video-production-orchestrator
     - web-to-obsidian-note
     - youtube-to-obsidian-note
 
@@ -78,8 +79,6 @@ unclassified_runtime_skills:
   - ops-safety
   - python-dev
   - react-best-practices
-  - security-threat-model
   - speech
   - theme-factory
   - transcribe
-  - video-production-orchestrator
