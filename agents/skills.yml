@@ -1,7 +1,8 @@
 version: 1
+runtime_catalog: skills-runtime.json
 
-# `~/.agents/skills` is a link farm. Personal skills live in the private Git
-# repository; third-party skills remain sourced from their upstream projects.
+# Git sources remain pinned below; reviewed local copies and overrides are
+# fingerprinted in runtime_catalog and have verified recovery snapshots.
 runtime_root: ~/.agents/skills
 state_root: ~/.local/share/agent-skills
 personal:
@@ -16,9 +17,13 @@ personal:
     - gitlab-wiki-export
     - markdown-report-pdf
     - obsidian-meeting-filename-normalizer
+    - optimize-end-to-end-systems
+    - run-resumable-long-tasks
     - strategy-research-report
+    - use-y9000-pdf-ocr
     - web-to-obsidian-note
-    - youtube-to-obsidian-note
+    - video-to-obsidian-note
+    - video-production-orchestrator
 
 sources:
   mattpocock:
@@ -78,8 +83,6 @@ unclassified_runtime_skills:
   - ops-safety
   - python-dev
   - react-best-practices
-  - security-threat-model
   - speech
   - theme-factory
   - transcribe
-  - video-production-orchestrator

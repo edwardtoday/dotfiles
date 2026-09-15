@@ -1,0 +1,1054 @@
+{
+  "version": 1,
+  "runtime_roots": [
+    "~/.agents/skills",
+    "~/.codex/skills"
+  ],
+  "skills": [
+    {
+      "tree_sha256": "2d15e61d691585bf741eff8865c1cd21ad2c1de22544d6dd561a585a4d2d7c29",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/2d15e61d691585bf741eff8865c1cd21ad2c1de22544d6dd561a585a4d2d7c29.tar.gz",
+      "archive_sha256": "5cf1f2bc7968bf46103baa51e6d49435dde5a6860c3e399ad3a5d167abbde586",
+      "name": "absorb-sources",
+      "runtime_path": "/Users/qingpei/.agents/skills/absorb-sources",
+      "source_path": "/Users/qingpei/.agents/skills/absorb-sources",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "ea976ea8803dfcfecd2e7b1d74e8dbeb390a220c072a60baad96e15c1a65265d",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/ea976ea8803dfcfecd2e7b1d74e8dbeb390a220c072a60baad96e15c1a65265d.tar.gz",
+      "archive_sha256": "2c32dd036ac224bda8f6340f53658fe6fb572c4c8f204ed9096f69c520e257fc",
+      "name": "advance-my-gitlab-mrs",
+      "runtime_path": "/Users/qingpei/.agents/skills/advance-my-gitlab-mrs",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/advance-my-gitlab-mrs",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/advance-my-gitlab-mrs"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "305050113f7d5b4eb5b2222585d66f98954dceaf5ceb41c2ab6b5f2bce4e6e12",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/305050113f7d5b4eb5b2222585d66f98954dceaf5ceb41c2ab6b5f2bce4e6e12.tar.gz",
+      "archive_sha256": "7891b5e41407b859420d0473127e7f5d6b9c7f46e5e4fb3c4aa1a2535cc13c5c",
+      "name": "cloudflare-deploy",
+      "runtime_path": "/Users/qingpei/.agents/skills/cloudflare-deploy",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/sources/openai-skills/skills/.curated/cloudflare-deploy",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/openai/skills.git",
+        "revision": "49f948faa9258a0c61caceaf225e179651397431",
+        "subdir": "skills/.curated/cloudflare-deploy",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "e5adb604f68e1744b98c6913a5ab566f99807991e02ee9be457209106d75cb2b",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/e5adb604f68e1744b98c6913a5ab566f99807991e02ee9be457209106d75cb2b.tar.gz",
+      "archive_sha256": "f8d1ec60b145712c63721347e50cde4d58b72ef47cd923b9bcdd8e291b25453d",
+      "name": "code-review",
+      "runtime_path": "/Users/qingpei/.agents/skills/code-review",
+      "source_path": "/Users/qingpei/.agents/skills/code-review",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/code-review",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "c5a82be14b6e7d4ddde55741c78ba56fd3a7975659d8c5f95da37fd883de300d",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/c5a82be14b6e7d4ddde55741c78ba56fd3a7975659d8c5f95da37fd883de300d.tar.gz",
+      "archive_sha256": "ea8127691f53b2bf62f9421709f27a28a5e07247f2171015c272d4e9ee086fb6",
+      "name": "codebase-design",
+      "runtime_path": "/Users/qingpei/.agents/skills/codebase-design",
+      "source_path": "/Users/qingpei/.agents/skills/codebase-design",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/codebase-design",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "b12193e954b26b84265862d05ae772c08a45f712c35cd0d34b290316be7d1349",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/b12193e954b26b84265862d05ae772c08a45f712c35cd0d34b290316be7d1349.tar.gz",
+      "archive_sha256": "24585afac315805c5488c5bf1c9a8f515b9d50d02cf3abdc28a27f1da2c22ae5",
+      "name": "codex-ppt",
+      "runtime_path": "/Users/qingpei/.agents/skills/codex-ppt",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/sources/ningzimu/skills/codex-ppt",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/ningzimu/codex-ppt-skill.git",
+        "revision": "f2ed80372f65bb05fe62dd07979b239a17ac065d",
+        "subdir": "skills/codex-ppt",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "3bf5f416f754557084fcd85996e1927d6bd47ea7deeda5a180903910ffaf950a",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/3bf5f416f754557084fcd85996e1927d6bd47ea7deeda5a180903910ffaf950a.tar.gz",
+      "archive_sha256": "cbb71aec9ce1e87168abd5a2799febadbb3bbfdb1a2c7e0523043b3bacb5d004",
+      "name": "diagnosing-bugs",
+      "runtime_path": "/Users/qingpei/.agents/skills/diagnosing-bugs",
+      "source_path": "/Users/qingpei/.agents/skills/diagnosing-bugs",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/diagnosing-bugs",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "c43d561c06e2a94fabcfddddd4181829200a55ecd9532fb55eeea2070b4f2ece",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/c43d561c06e2a94fabcfddddd4181829200a55ecd9532fb55eeea2070b4f2ece.tar.gz",
+      "archive_sha256": "da1611563a5f7ab526ec2462ba00bae6b9f7041b7c51e17e1f34a8d61af61161",
+      "name": "domain-modeling",
+      "runtime_path": "/Users/qingpei/.agents/skills/domain-modeling",
+      "source_path": "/Users/qingpei/.agents/skills/domain-modeling",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/domain-modeling",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "aabf865d8f741dbdf490482a982d399d3b144d58a080883f9a9e81182de2db6f",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/aabf865d8f741dbdf490482a982d399d3b144d58a080883f9a9e81182de2db6f.tar.gz",
+      "archive_sha256": "fbb73f8a944c6684464bdd2c6fff873ebc94c5b06ead66fc45e88b2bb0014001",
+      "name": "find-skills",
+      "runtime_path": "/Users/qingpei/.agents/skills/find-skills",
+      "source_path": "/Users/qingpei/.agents/skills/find-skills",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/vercel-labs/skills.git",
+        "revision": "1164afa5f0e21ebd01e6fc11249759353f494ad1",
+        "subdir": "skills/find-skills",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "17349f44e2d93fe9b76cb3df08e2da5cf17f330435f8e30f0aea37d344f01c18",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/17349f44e2d93fe9b76cb3df08e2da5cf17f330435f8e30f0aea37d344f01c18.tar.gz",
+      "archive_sha256": "30b4de115ffa9b3745e5d60e2dbc6ca9da12ca63b191e2dbea62ec6ad393b0af",
+      "name": "frontend-skill",
+      "runtime_path": "/Users/qingpei/.agents/skills/frontend-skill",
+      "source_path": "/Users/qingpei/.agents/skills/frontend-skill",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "17dd39f108e973bc7205d3418fc297137e3b03e709c80385a1cfb2fd31b51697",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/17dd39f108e973bc7205d3418fc297137e3b03e709c80385a1cfb2fd31b51697.tar.gz",
+      "archive_sha256": "847d6404485d686c4b1cb7f312b81af1e1e451a9b75e29939fb3b6cce4e9b088",
+      "name": "generate-images-via-providers",
+      "runtime_path": "/Users/qingpei/.agents/skills/generate-images-via-providers",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/generate-images-via-providers",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/generate-images-via-providers"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "21cf293f16fe6b85bb6821c0fbd33bef154a03c694a54f93423284281f223c60",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/21cf293f16fe6b85bb6821c0fbd33bef154a03c694a54f93423284281f223c60.tar.gz",
+      "archive_sha256": "fb81a6cb82bc4960fde08b9a7ad8d01205ae3f9dc8e45d147460d1beb9997108",
+      "name": "gitlab-ci-pipeline-optimization",
+      "runtime_path": "/Users/qingpei/.agents/skills/gitlab-ci-pipeline-optimization",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/gitlab-ci-pipeline-optimization",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/gitlab-ci-pipeline-optimization"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "62780982a1972104f846d141ace54b76b31582ff2c6d5ef5396640b5aa5aed97",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/62780982a1972104f846d141ace54b76b31582ff2c6d5ef5396640b5aa5aed97.tar.gz",
+      "archive_sha256": "41d9d4f7f965355366291af5bd63b6e1785875d331ae9e057655361a4a80f795",
+      "name": "gitlab-pipeline-failure-triage",
+      "runtime_path": "/Users/qingpei/.agents/skills/gitlab-pipeline-failure-triage",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/gitlab-pipeline-failure-triage",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/gitlab-pipeline-failure-triage"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "5a6b0e10734b49ada37b8618b42914974cb46183933536a83656a8cf65c7ea74",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/5a6b0e10734b49ada37b8618b42914974cb46183933536a83656a8cf65c7ea74.tar.gz",
+      "archive_sha256": "8dbc706aecfe91496d5c26a325e016103406f2d637ac09b61a0cc50760ed05e2",
+      "name": "gitlab-wiki-export",
+      "runtime_path": "/Users/qingpei/.agents/skills/gitlab-wiki-export",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/gitlab-wiki-export",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/gitlab-wiki-export"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "d2e16c0fa80013cabf74735572afe3f2dc533ab3fcd65264d98c6b1a17ac8a7f",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/d2e16c0fa80013cabf74735572afe3f2dc533ab3fcd65264d98c6b1a17ac8a7f.tar.gz",
+      "archive_sha256": "6b7bb1b7ab795ed87dc575037356b641c40f89eb8d9174b2f3483e586ad83adb",
+      "name": "go-dev",
+      "runtime_path": "/Users/qingpei/.agents/skills/go-dev",
+      "source_path": "/Users/qingpei/.agents/skills/go-dev",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "5577d798212ef215c9b0864f573b35733fe3617e74dc4dc6c6b62a4a2853c0a5",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/5577d798212ef215c9b0864f573b35733fe3617e74dc4dc6c6b62a4a2853c0a5.tar.gz",
+      "archive_sha256": "63648767d7bb09e57b9a9bfa2e786b49e2dfd9a62b8f2122e669c809e5567d58",
+      "name": "grill-me",
+      "runtime_path": "/Users/qingpei/.agents/skills/grill-me",
+      "source_path": "/Users/qingpei/.agents/skills/grill-me",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/productivity/grill-me",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "2ca47082efd417918c8fa2bcc16c69175a2e1c83774145e1f8169cd609fc78b0",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/2ca47082efd417918c8fa2bcc16c69175a2e1c83774145e1f8169cd609fc78b0.tar.gz",
+      "archive_sha256": "141bec00f82bdc1b38d9d77e4f1895699d86b2b7db09e62c65ec0af2904c499e",
+      "name": "grill-with-docs",
+      "runtime_path": "/Users/qingpei/.agents/skills/grill-with-docs",
+      "source_path": "/Users/qingpei/.agents/skills/grill-with-docs",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/grill-with-docs",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "6c3b15ab9c4800dfa779f025cbc63909cad066042548e15c944ac581090220d9",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/6c3b15ab9c4800dfa779f025cbc63909cad066042548e15c944ac581090220d9.tar.gz",
+      "archive_sha256": "3d69792054dcfc796c149b8cefc22b0404df9edb53c8144843cfa82b60ebb06b",
+      "name": "grilling",
+      "runtime_path": "/Users/qingpei/.agents/skills/grilling",
+      "source_path": "/Users/qingpei/.agents/skills/grilling",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/productivity/grilling",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "904b621920e419f41f3c5512d03fdcb5cdb498f733a665bb8c218ca9e1c5a685",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/904b621920e419f41f3c5512d03fdcb5cdb498f733a665bb8c218ca9e1c5a685.tar.gz",
+      "archive_sha256": "663a6eea6f7f7049a2ffb4262921f2f0b98bb1a20a440a07122bdf8a7fc5fb47",
+      "name": "guizang-ppt-skill",
+      "runtime_path": "/Users/qingpei/.agents/skills/guizang-ppt-skill",
+      "source_path": "/Users/qingpei/.agents/skills/guizang-ppt-skill",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/op7418/guizang-ppt-skill.git",
+        "revision": "929c2ecb63a22b54d400c4911ed70bf96c2b355d",
+        "subdir": ".",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "ac5f7331f6534fd1b2d614412af3e55056af06d4c9ffb624fdcd70e3d5dbbe5a",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/ac5f7331f6534fd1b2d614412af3e55056af06d4c9ffb624fdcd70e3d5dbbe5a.tar.gz",
+      "archive_sha256": "d992436997b28b9cc858ca348535a908dd5ed373dfe894f3f904071d598976a4",
+      "name": "handoff",
+      "runtime_path": "/Users/qingpei/.agents/skills/handoff",
+      "source_path": "/Users/qingpei/.agents/skills/handoff",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/productivity/handoff",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "4ac0b703644538d5f0bf698f0ece4b0d2f12c26a09f3667caf65eb462f13e0c4",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/4ac0b703644538d5f0bf698f0ece4b0d2f12c26a09f3667caf65eb462f13e0c4.tar.gz",
+      "archive_sha256": "a1f721479f3ef128ebd6d7dd7720b404371e3fec047731a0563d35086abfdd3c",
+      "name": "implement",
+      "runtime_path": "/Users/qingpei/.agents/skills/implement",
+      "source_path": "/Users/qingpei/.agents/skills/implement",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/implement",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "86ff3231e8342df82610a48a32efdb3d0ccecbed30be2dfbe9323d1fef2381dc",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/86ff3231e8342df82610a48a32efdb3d0ccecbed30be2dfbe9323d1fef2381dc.tar.gz",
+      "archive_sha256": "71fa9b51cc9fe1aaafadf14fe9b35a397ec4867d66bc4e847d63a375c583f73a",
+      "name": "improve-codebase-architecture",
+      "runtime_path": "/Users/qingpei/.agents/skills/improve-codebase-architecture",
+      "source_path": "/Users/qingpei/.agents/skills/improve-codebase-architecture",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/improve-codebase-architecture",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "f5f9985156f91c94dd96c3f651b96019faa02a92e6a215623947b9793379c951",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/f5f9985156f91c94dd96c3f651b96019faa02a92e6a215623947b9793379c951.tar.gz",
+      "archive_sha256": "6fc6518dcae1603d4e9cedb477aa2e041815ccba926a474a77c03a24bdb2fa41",
+      "name": "internal-comms",
+      "runtime_path": "/Users/qingpei/.agents/skills/internal-comms",
+      "source_path": "/Users/qingpei/.agents/skills/internal-comms",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "17c16c80d7fe4a8158138ecb4b440ebe8cfefe72a79992c3df0e8bdf1a77fe86",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/17c16c80d7fe4a8158138ecb4b440ebe8cfefe72a79992c3df0e8bdf1a77fe86.tar.gz",
+      "archive_sha256": "44278108f0a04ba598c295e411760f4dc82fbe347efb2cf47815d9510a490670",
+      "name": "jupyter-notebook",
+      "runtime_path": "/Users/qingpei/.agents/skills/jupyter-notebook",
+      "source_path": "/Users/qingpei/.agents/skills/jupyter-notebook",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "18ab2caf0622feb1415858f7de5f7766f6f330675605bb375265a7b64f05baf0",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/18ab2caf0622feb1415858f7de5f7766f6f330675605bb375265a7b64f05baf0.tar.gz",
+      "archive_sha256": "2091908304a856bd50b43aab6d52b300eefb9b5a33564a46b800f868e0646af5",
+      "name": "markdown-report-pdf",
+      "runtime_path": "/Users/qingpei/.agents/skills/markdown-report-pdf",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/markdown-report-pdf",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/markdown-report-pdf"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "129c2a7328a9ab82d74c07ea53fb654bebe9ab5ca7b2ef7e7b14495514be56d3",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/129c2a7328a9ab82d74c07ea53fb654bebe9ab5ca7b2ef7e7b14495514be56d3.tar.gz",
+      "archive_sha256": "979c267adc06038378ce7921c4205b443d206cf03e76d093a43573a7665eb4c0",
+      "name": "minjin-proposal-radar",
+      "runtime_path": "/Users/qingpei/.agents/skills/minjin-proposal-radar",
+      "source_path": "/Users/qingpei/.agents/skills/minjin-proposal-radar",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "372d0973820a40314c5d3d03863a1694cc1c7821d7f5edff9feccdfe4ec123a7",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/372d0973820a40314c5d3d03863a1694cc1c7821d7f5edff9feccdfe4ec123a7.tar.gz",
+      "archive_sha256": "af118692ff4544cec6a7ece2b5134a90665f8e77690494191f65d4fdc87852aa",
+      "name": "obsidian-meeting-filename-normalizer",
+      "runtime_path": "/Users/qingpei/.agents/skills/obsidian-meeting-filename-normalizer",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/obsidian-meeting-filename-normalizer",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/obsidian-meeting-filename-normalizer"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "392f8265a38f87ca552e9d99e4ef6ad4d991b5ddaa813fb006f95487a8d3b130",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/392f8265a38f87ca552e9d99e4ef6ad4d991b5ddaa813fb006f95487a8d3b130.tar.gz",
+      "archive_sha256": "04784b686916b66dad1872ce7f5541e1f3953414bf7d92eb8b8de3ecc0186741",
+      "name": "officecli",
+      "runtime_path": "/Users/qingpei/.agents/skills/officecli",
+      "source_path": "/Users/qingpei/.agents/skills/officecli",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "9f4001b69e9e5285adefffab4d0c47aa00d10da2afb090a5c0548c0212995bfb",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/9f4001b69e9e5285adefffab4d0c47aa00d10da2afb090a5c0548c0212995bfb.tar.gz",
+      "archive_sha256": "53ee807251d8093906ced3d29e5350fa03f9b8d92075abdcdd36c978d7dc510e",
+      "name": "ops-safety",
+      "runtime_path": "/Users/qingpei/.agents/skills/ops-safety",
+      "source_path": "/Users/qingpei/.agents/skills/ops-safety",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "03b71714c248aa02978c1731ec8c15b4916e3c8732e7e45a8bc8a7fffddeb32f",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/03b71714c248aa02978c1731ec8c15b4916e3c8732e7e45a8bc8a7fffddeb32f.tar.gz",
+      "archive_sha256": "b40ca0903ce07a54d002be31a5b3b325b6de3c4f720fd9d78faec71303f14658",
+      "name": "optimize-end-to-end-systems",
+      "runtime_path": "/Users/qingpei/.agents/skills/optimize-end-to-end-systems",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/optimize-end-to-end-systems",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/optimize-end-to-end-systems"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "2cd5917a2ccad16065809a29f70cda1e69c4b1478c51d894db28f58d79c7e564",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/2cd5917a2ccad16065809a29f70cda1e69c4b1478c51d894db28f58d79c7e564.tar.gz",
+      "archive_sha256": "6d69cacfdecbc039f084422560cedf775d6e9be88b75d7afaa720d1277df8f33",
+      "name": "ppt-master",
+      "runtime_path": "/Users/qingpei/.agents/skills/ppt-master",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/sources/hugohe3/ppt-master/skills/ppt-master",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "adc5fe748b1a128e8719dfa4b6c58aafca536d2614161bcac621cecda78ce09c",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/adc5fe748b1a128e8719dfa4b6c58aafca536d2614161bcac621cecda78ce09c.tar.gz",
+      "archive_sha256": "56c29c96422335d19113fade3bd75eeb86b63b69cc68620d6fec92489f7afe99",
+      "name": "prototype",
+      "runtime_path": "/Users/qingpei/.agents/skills/prototype",
+      "source_path": "/Users/qingpei/.agents/skills/prototype",
+      "origin": {
+        "kind": "installer",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "skill_path": "skills/engineering/prototype/SKILL.md",
+        "installer_folder_hash": "e41d92e171f074a2b6887d8f6faca4a15c83d1ca"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "c6547b9229fc856261683b5de1c94811acae5219a68c33c349a7ad2d32387ac2",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/c6547b9229fc856261683b5de1c94811acae5219a68c33c349a7ad2d32387ac2.tar.gz",
+      "archive_sha256": "a70d7666a6869674e0bc0aa3b19610146e83c50870bb566ca0eea10d0721f0a0",
+      "name": "python-dev",
+      "runtime_path": "/Users/qingpei/.agents/skills/python-dev",
+      "source_path": "/Users/qingpei/.agents/skills/python-dev",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "6958e5691d75ae938925e342b15aaa725e294b20f3d8e9e7a4ebd57520721a70",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/6958e5691d75ae938925e342b15aaa725e294b20f3d8e9e7a4ebd57520721a70.tar.gz",
+      "archive_sha256": "7be65c40440042e0debfdb44ebd12c830084cb4e870d9dcad9564e9f0eefbaad",
+      "name": "ra",
+      "runtime_path": "/Users/qingpei/.agents/skills/ra",
+      "source_path": "/Users/qingpei/.agents/skills/ra",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "4d0832722f1b8e87c78a11b6833178834a6d170eb8540dee44cc6a95b792530f",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/4d0832722f1b8e87c78a11b6833178834a6d170eb8540dee44cc6a95b792530f.tar.gz",
+      "archive_sha256": "0ebc8381d00b3bb7be404cebe9e11c0ab37037de90c231f5aa8676daa9031b84",
+      "name": "react-best-practices",
+      "runtime_path": "/Users/qingpei/.agents/skills/react-best-practices",
+      "source_path": "/Users/qingpei/.agents/skills/react-best-practices",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "fc9be24ca371c36603d706c2062309ec09388a557d7bc088bfa824adce684c91",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/fc9be24ca371c36603d706c2062309ec09388a557d7bc088bfa824adce684c91.tar.gz",
+      "archive_sha256": "88fccd748ed51dd2506c55bdc4a20fa727757250164a27227ec3575bb2e9db69",
+      "name": "remotion-best-practices",
+      "runtime_path": "/Users/qingpei/.agents/skills/remotion-best-practices",
+      "source_path": "/Users/qingpei/.agents/skills/remotion-best-practices",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/remotion-dev/skills.git",
+        "revision": "f94c1e18db2bb30b904784b986f6897822b8f152",
+        "subdir": "skills/remotion-best-practices",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "20f6027432b32cbbc13861e9727a6ecdc0c1a86cc09cfe3178d09280b449e881",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/20f6027432b32cbbc13861e9727a6ecdc0c1a86cc09cfe3178d09280b449e881.tar.gz",
+      "archive_sha256": "854be96309f3c54d515032f3fcf69537031051c0565a3d8116904c2316f9918d",
+      "name": "remove-ai-marks",
+      "runtime_path": "/Users/qingpei/.agents/skills/remove-ai-marks",
+      "source_path": "/Users/qingpei/.agents/skills/remove-ai-marks",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "bd6cec2e70593f3112ab97f5808985fee25d4bb1ebb83cca86a0294e3d98a098",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/bd6cec2e70593f3112ab97f5808985fee25d4bb1ebb83cca86a0294e3d98a098.tar.gz",
+      "archive_sha256": "3f8d44a84a59c8dfbf2eea8cadbab0ab38b89222c4904ecb6f544ee5ba5716b9",
+      "name": "remove-ai-media-watermarks",
+      "runtime_path": "/Users/qingpei/.agents/skills/remove-ai-media-watermarks",
+      "source_path": "/Users/qingpei/.agents/skills/remove-ai-media-watermarks",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "667f6876c8c26987e78659c62c2c9e4cb50bb8c5dee156ed16151218a8b4c5a8",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/667f6876c8c26987e78659c62c2c9e4cb50bb8c5dee156ed16151218a8b4c5a8.tar.gz",
+      "archive_sha256": "443226d75eec968df9ca8dd436b02472ba100795f81f6842ea221f4a2ca3ea5f",
+      "name": "research",
+      "runtime_path": "/Users/qingpei/.agents/skills/research",
+      "source_path": "/Users/qingpei/.agents/skills/research",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/research",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "21b1bf53be9d503fc58c879632530e115a582f11d8b814bd374b816d6bea3188",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/21b1bf53be9d503fc58c879632530e115a582f11d8b814bd374b816d6bea3188.tar.gz",
+      "archive_sha256": "efd7db32b4a4137bb0a039e820f06d76601a0cb845d53d2d1de7479677aa76bd",
+      "name": "resolving-merge-conflicts",
+      "runtime_path": "/Users/qingpei/.agents/skills/resolving-merge-conflicts",
+      "source_path": "/Users/qingpei/.agents/skills/resolving-merge-conflicts",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/resolving-merge-conflicts",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "fbeb3987a34502d2adc48ff7c9d82d7baf79dd8cfc5cd8ff304e319d7a6340e3",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/fbeb3987a34502d2adc48ff7c9d82d7baf79dd8cfc5cd8ff304e319d7a6340e3.tar.gz",
+      "archive_sha256": "36e3480db59c4fde4546e7a40c357b5baa9729f79e7c7f8f7b71b7d455fb872c",
+      "name": "run-resumable-long-tasks",
+      "runtime_path": "/Users/qingpei/.agents/skills/run-resumable-long-tasks",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/run-resumable-long-tasks",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/run-resumable-long-tasks"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "34dcb88dc4439217e872d06c4500d29f5cb3ca2615e888951f6eb88420d854b1",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/34dcb88dc4439217e872d06c4500d29f5cb3ca2615e888951f6eb88420d854b1.tar.gz",
+      "archive_sha256": "8bce86cb516e39dfe901310255080f8331550a7540ab99b9e3b76e60df8eeba5",
+      "name": "security-threat-model",
+      "runtime_path": "/Users/qingpei/.agents/skills/security-threat-model",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/sources/openai-skills/skills/.curated/security-threat-model",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/openai/skills.git",
+        "revision": "49f948faa9258a0c61caceaf225e179651397431",
+        "subdir": "skills/.curated/security-threat-model",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "9a85291c8f068923dd213ebd7776038ea2bcca44809af40846e4e855840c2b8c",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/9a85291c8f068923dd213ebd7776038ea2bcca44809af40846e4e855840c2b8c.tar.gz",
+      "archive_sha256": "f35e9aae54f46bbb4d77959fa2b93b9df735c4b06af27e63dc6d15444a5ae433",
+      "name": "speech",
+      "runtime_path": "/Users/qingpei/.agents/skills/speech",
+      "source_path": "/Users/qingpei/.agents/skills/speech",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "3edbfdafeb7d8bc5cdfeb768424292287fdd90759434e07be192c710ce29461d",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/3edbfdafeb7d8bc5cdfeb768424292287fdd90759434e07be192c710ce29461d.tar.gz",
+      "archive_sha256": "52452b649254508b5fb57532ee92f44859358e9ef71be36c646f47d74129bf9b",
+      "name": "strategy-research-report",
+      "runtime_path": "/Users/qingpei/.agents/skills/strategy-research-report",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/strategy-research-report",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/strategy-research-report"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "af907971c040596010de1ef0f2895d3fbf6611cde9634e87f6b2d415c0ba8156",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/af907971c040596010de1ef0f2895d3fbf6611cde9634e87f6b2d415c0ba8156.tar.gz",
+      "archive_sha256": "cec0751c16dbdb81024f8971964ac9ecebbb2ee13a0eb746feec6035900ffd46",
+      "name": "tdd",
+      "runtime_path": "/Users/qingpei/.agents/skills/tdd",
+      "source_path": "/Users/qingpei/.agents/skills/tdd",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/tdd",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "fca2ca3610546ad74d0b254f76d051dcee2a6500a5ebd981c6923c9abfe1621c",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/fca2ca3610546ad74d0b254f76d051dcee2a6500a5ebd981c6923c9abfe1621c.tar.gz",
+      "archive_sha256": "515955fa4fa4ca100b6533e19a340bfd312d384d5a27e9300ff13968d50b6e49",
+      "name": "teach",
+      "runtime_path": "/Users/qingpei/.agents/skills/teach",
+      "source_path": "/Users/qingpei/.agents/skills/teach",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/productivity/teach",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "347ef8aa3309454df0b940cf86e1173dcbaf5e33a1d16e386ca2165f1509247e",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/347ef8aa3309454df0b940cf86e1173dcbaf5e33a1d16e386ca2165f1509247e.tar.gz",
+      "archive_sha256": "e3bcdc2b9e201fde06d5d93e3bd521a5c9dfdc09564070a9c690a9e83986c2c8",
+      "name": "theme-factory",
+      "runtime_path": "/Users/qingpei/.agents/skills/theme-factory",
+      "source_path": "/Users/qingpei/.agents/skills/theme-factory",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "5ca576f6d978c5c61c087c43537e333616265bee25e6ea96ef306a171f389412",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/5ca576f6d978c5c61c087c43537e333616265bee25e6ea96ef306a171f389412.tar.gz",
+      "archive_sha256": "1649e50e117589addb3ff761f885bd0e7a0231a8382f6d7190ef95d4207cf54e",
+      "name": "to-spec",
+      "runtime_path": "/Users/qingpei/.agents/skills/to-spec",
+      "source_path": "/Users/qingpei/.agents/skills/to-spec",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/to-spec",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "fc6bad9ec50e808cd3e4145c63efa534eddd1d4b3fb9c6ffabd804028f71198f",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/fc6bad9ec50e808cd3e4145c63efa534eddd1d4b3fb9c6ffabd804028f71198f.tar.gz",
+      "archive_sha256": "af26b4b915fcb3b1dd4a94910c664040136e4d6be2fab6164b730af1c4e7bbf9",
+      "name": "to-tickets",
+      "runtime_path": "/Users/qingpei/.agents/skills/to-tickets",
+      "source_path": "/Users/qingpei/.agents/skills/to-tickets",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/to-tickets",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "4c4fea3b9c17d5364f0f72a53fb49e967341238dde4d64f89024931624338779",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/4c4fea3b9c17d5364f0f72a53fb49e967341238dde4d64f89024931624338779.tar.gz",
+      "archive_sha256": "840c5ded95fb18371b52c970d5768c94f529e63fcd0c295aedfaac468efee999",
+      "name": "transcribe",
+      "runtime_path": "/Users/qingpei/.agents/skills/transcribe",
+      "source_path": "/Users/qingpei/.agents/skills/transcribe",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "2313392104cedd87459bdbba2b887484498ba7dddd6fa912c3c050d553ebffa8",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/2313392104cedd87459bdbba2b887484498ba7dddd6fa912c3c050d553ebffa8.tar.gz",
+      "archive_sha256": "10aac82454dc73a0ab0d99c0531a08297c0701ab6fab5b9c47e0a651d0a455a7",
+      "name": "triage",
+      "runtime_path": "/Users/qingpei/.agents/skills/triage",
+      "source_path": "/Users/qingpei/.agents/skills/triage",
+      "origin": {
+        "kind": "installer",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "skill_path": "skills/engineering/triage/SKILL.md",
+        "installer_folder_hash": "95fa21bf236993cd9af25bd3670476c17fdb95a4"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "2d8e2340d156d57b9790e8da331b918a0404966eef050f847a0c07c1c30005ab",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/2d8e2340d156d57b9790e8da331b918a0404966eef050f847a0c07c1c30005ab.tar.gz",
+      "archive_sha256": "94340f8b7f32e1d1f1c2a4c2b6d5877a864dbbae61bc946ca22613ce7eba4404",
+      "name": "use-y9000-pdf-ocr",
+      "runtime_path": "/Users/qingpei/.agents/skills/use-y9000-pdf-ocr",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/use-y9000-pdf-ocr",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/use-y9000-pdf-ocr"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "db25c727803aaca9c980aa6bebb19fad9a0e40523f376db450c8a5a92b051751",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/db25c727803aaca9c980aa6bebb19fad9a0e40523f376db450c8a5a92b051751.tar.gz",
+      "archive_sha256": "c51fb3f79f3317da2d46635e2208d2a81d5f1ef6a5afeb30ab98768f48b0c33a",
+      "name": "video-production-orchestrator",
+      "runtime_path": "/Users/qingpei/.agents/skills/video-production-orchestrator",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/video-production-orchestrator",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/video-production-orchestrator"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "6d50fab8f8a00019ead0db4bcb581e62d45c63996e6dfe7064b572e0b2843748",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/6d50fab8f8a00019ead0db4bcb581e62d45c63996e6dfe7064b572e0b2843748.tar.gz",
+      "archive_sha256": "4fcc4dad98334d5e0026a9078bc1d7079579ddd6aa68c953fcdc0e4df22a35e5",
+      "name": "video-to-obsidian-note",
+      "runtime_path": "/Users/qingpei/.agents/skills/video-to-obsidian-note",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/video-to-obsidian-note",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/video-to-obsidian-note"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "4feb9911952c6473478da14c865e7eca524115638b3c2a3ccb17b34be8ddc7ad",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/4feb9911952c6473478da14c865e7eca524115638b3c2a3ccb17b34be8ddc7ad.tar.gz",
+      "archive_sha256": "2f2f8eadfbce0b30542b0058e4fabfcb325d25ada15a4ebb128941dbb64769ad",
+      "name": "wait-what",
+      "runtime_path": "/Users/qingpei/.agents/skills/wait-what",
+      "source_path": "/Users/qingpei/.agents/skills/wait-what",
+      "origin": {
+        "kind": "installer",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "skill_path": "skills/productivity/wait-what/SKILL.md",
+        "installer_folder_hash": "c119d66111cc1bac94cbc51322cd34ed21aa0446"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "52924ec83d74c6f323e4e5fff46527564b6f19ccdac48bbb3dd389a9eda5f0fb",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/52924ec83d74c6f323e4e5fff46527564b6f19ccdac48bbb3dd389a9eda5f0fb.tar.gz",
+      "archive_sha256": "66ec108f45fd3c6727bc299b90b4e4e16dbf87fae57adc89b127a3a6b6bc3fda",
+      "name": "wayfinder",
+      "runtime_path": "/Users/qingpei/.agents/skills/wayfinder",
+      "source_path": "/Users/qingpei/.agents/skills/wayfinder",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/engineering/wayfinder",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "c172247289dd417b4552ae993bb76760d1aced071358e90bbc1d71e2b2b3ab25",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/c172247289dd417b4552ae993bb76760d1aced071358e90bbc1d71e2b2b3ab25.tar.gz",
+      "archive_sha256": "d4d644342cbd3f3afce9f24d04b6f83f028fb7554addbd3d31f3c7746bc5183f",
+      "name": "web-to-obsidian-note",
+      "runtime_path": "/Users/qingpei/.agents/skills/web-to-obsidian-note",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/web-to-obsidian-note",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/web-to-obsidian-note"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "bd37dead7196651341ce71376072a11800a53f165557c4e018f9b06df6dc7eb7",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/bd37dead7196651341ce71376072a11800a53f165557c4e018f9b06df6dc7eb7.tar.gz",
+      "archive_sha256": "2f84b93350476225fb39653643cc42ca11b27820ee98cf1d23c866fa6cc7d107",
+      "name": "writing-for-agents",
+      "runtime_path": "/Users/qingpei/.agents/skills/writing-for-agents",
+      "source_path": "/Users/qingpei/.agents/skills/writing-for-agents",
+      "origin": {
+        "kind": "installer",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "skill_path": "skills/productivity/writing-for-agents/SKILL.md",
+        "installer_folder_hash": "ad2925850efb8973a72d2e666f7a975f9a2d4a9b"
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "1c5c4b2943a6701520f6692cea353e74932cedca2c5f7c8afa92cdb2638ef18f",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/1c5c4b2943a6701520f6692cea353e74932cedca2c5f7c8afa92cdb2638ef18f.tar.gz",
+      "archive_sha256": "7bad9d54d4a3c8524ab23c7b12e22249b64c2a6eeceeca07a2846f5b3f1f1039",
+      "name": "writing-great-skills",
+      "runtime_path": "/Users/qingpei/.agents/skills/writing-great-skills",
+      "source_path": "/Users/qingpei/.agents/skillpacks/mattpocock/skills/productivity/writing-great-skills",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/mattpocock/skills.git",
+        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "subdir": "skills/productivity/writing-great-skills",
+        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "f008552b6fb42bfc73450294ba66ab60d65bf2529b934c1341a4a4c0c134bf49",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/f008552b6fb42bfc73450294ba66ab60d65bf2529b934c1341a4a4c0c134bf49.tar.gz",
+      "archive_sha256": "dbdae275d7ef555ef550f963ddfd8a56330e69d7ee48533bdecc9070ff811136",
+      "name": "edit-video-with-evidence",
+      "runtime_path": "/Users/qingpei/.codex/skills/edit-video-with-evidence",
+      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/edit-video-with-evidence",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "735aba981926578644d2fe9948de919fb8a14ca4e54d70494631bf3661a69b36",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/735aba981926578644d2fe9948de919fb8a14ca4e54d70494631bf3661a69b36.tar.gz",
+      "archive_sha256": "4f104238bc30997f933c0b9f04f1ba28e397f72c6b4097a26979f211ecbee4c2",
+      "name": "gc-minimal-zine-poster",
+      "runtime_path": "/Users/qingpei/.codex/skills/gc-minimal-zine-poster",
+      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/gc-minimal-zine-poster",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "6a0c8dc35bdea8ccee4f0aea9389d3df577e26cabc59d157e4a74be7fad4bec0",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/6a0c8dc35bdea8ccee4f0aea9389d3df577e26cabc59d157e4a74be7fad4bec0.tar.gz",
+      "archive_sha256": "76348ad5ac698167832fafbb80675de279dac739fcde6cf341e813751a957371",
+      "name": "goal-prompt",
+      "runtime_path": "/Users/qingpei/.codex/skills/goal-prompt",
+      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/goal-prompt",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "f4dc7af540801c7e9e2a9e1f71327e6b2dad3b0b95631d66f7e6b6fa84df7557",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/f4dc7af540801c7e9e2a9e1f71327e6b2dad3b0b95631d66f7e6b6fa84df7557.tar.gz",
+      "archive_sha256": "7e3dec5dcb70c4dd1b887c3786c533cfa6ea552377d14ce63e608b3b90c481ae",
+      "name": "miniflux-reading-secretary",
+      "runtime_path": "/Users/qingpei/.codex/skills/miniflux-reading-secretary",
+      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/miniflux-reading-secretary",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "8b47fdc49f94e9989fb62889d804db43458bdc6d234d00e5b2062b4a3cc1e400",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/8b47fdc49f94e9989fb62889d804db43458bdc6d234d00e5b2062b4a3cc1e400.tar.gz",
+      "archive_sha256": "2bca6ef67dc0dd5f121e869cbe6307a13f9ed897c7a013dd30f5927382cb656f",
+      "name": "monthly-workflow-reflection",
+      "runtime_path": "/Users/qingpei/.codex/skills/monthly-workflow-reflection",
+      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/monthly-workflow-reflection",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "d18bd640fc660fd4b3ccb65dfe69920fb3a2aa21973dda21849d406f1327e240",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/d18bd640fc660fd4b3ccb65dfe69920fb3a2aa21973dda21849d406f1327e240.tar.gz",
+      "archive_sha256": "6a7cc9fd9852f0f4484f76bbe922356911c025ff10fcd8145de9972090a4a8a3",
+      "name": "playwright",
+      "runtime_path": "/Users/qingpei/.codex/skills/playwright",
+      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/playwright",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "2cd5917a2ccad16065809a29f70cda1e69c4b1478c51d894db28f58d79c7e564",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/2cd5917a2ccad16065809a29f70cda1e69c4b1478c51d894db28f58d79c7e564.tar.gz",
+      "archive_sha256": "6d69cacfdecbc039f084422560cedf775d6e9be88b75d7afaa720d1277df8f33",
+      "name": "ppt-master",
+      "runtime_path": "/Users/qingpei/.codex/skills/ppt-master",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/sources/hugohe3/ppt-master/skills/ppt-master",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "acde3a70caea71a42540c7e386d8468e66d7c3b0d0c5907d14cce01a80e1e5d9",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/acde3a70caea71a42540c7e386d8468e66d7c3b0d0c5907d14cce01a80e1e5d9.tar.gz",
+      "archive_sha256": "b4fbd6f939b6da6ec1a80a6894ef5b5d6e20de6098167790c918e6371654a8fb",
+      "name": "presentation-quality",
+      "runtime_path": "/Users/qingpei/.codex/skills/presentation-quality",
+      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/presentation-quality",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "4b4d3d80bdeb5b12a58037236bd778d53e17abed4b7bd56b3ce4b2af1fb50f85",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/4b4d3d80bdeb5b12a58037236bd778d53e17abed4b7bd56b3ce4b2af1fb50f85.tar.gz",
+      "archive_sha256": "a93f70ba8dcd571eea26140d73a522ca2bf429a94ef7570cd51e6499bd9fc1d8",
+      "name": "read-books-incrementally",
+      "runtime_path": "/Users/qingpei/.codex/skills/read-books-incrementally",
+      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/read-books-incrementally",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "c92fa25b90bd5564ed3dbc2ae8b44567e79fb95c789769cd391de64599b15cc6",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/c92fa25b90bd5564ed3dbc2ae8b44567e79fb95c789769cd391de64599b15cc6.tar.gz",
+      "archive_sha256": "aafa2dca789328dd63737e16069980ddf6d3b12358e96dccc22d83a04c626f11",
+      "name": "screenshot",
+      "runtime_path": "/Users/qingpei/.codex/skills/screenshot",
+      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/screenshot",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "5f0e246a4fde965afcc795dd6c61b65744de205d713cb77b4f93d6dd59a94b87",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/5f0e246a4fde965afcc795dd6c61b65744de205d713cb77b4f93d6dd59a94b87.tar.gz",
+      "archive_sha256": "acbf3a90e650100ea9befacabd3d47b47b0b5833c00705db050e6963873415ff",
+      "name": "security-best-practices",
+      "runtime_path": "/Users/qingpei/.codex/skills/security-best-practices",
+      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/security-best-practices",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "5a7e6b2444a88857e953a48a046e290184103546efd9a00ffe8bc81d3483698f",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/5a7e6b2444a88857e953a48a046e290184103546efd9a00ffe8bc81d3483698f.tar.gz",
+      "archive_sha256": "a38281d26e4a2ef86c7af753d5628d1526f2cf1f29a2ffc4f4ac8aed8d5a666f",
+      "name": "tencent-docs",
+      "runtime_path": "/Users/qingpei/.codex/skills/tencent-docs",
+      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/tencent-docs",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "2b046a080e31e9e5e1113216c42c6260be5b2c0cad5ddc51ff59af9aef3e3bb0",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/2b046a080e31e9e5e1113216c42c6260be5b2c0cad5ddc51ff59af9aef3e3bb0.tar.gz",
+      "archive_sha256": "a85b23dc7ce76dbd3094622c30497b51cbb3da51fc28189cb32ae2d7dab3f0b8",
+      "name": "travel-photo-abstraction",
+      "runtime_path": "/Users/qingpei/.codex/skills/travel-photo-abstraction",
+      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/travel-photo-abstraction",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    }
+  ],
+  "updated_at": "2026-09-14T13:59:33Z"
+}
