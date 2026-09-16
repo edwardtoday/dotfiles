@@ -241,6 +241,14 @@ cask "xquartz"
 cask "yuanbao"
 cask "zerotier-one"
 
+# 下列应用同样是 Homebrew cask，但本机刻意保持手动安装，勿加入上方清单：
+# - pencil：cask "pencil" 是 The Pencil Project，本机用的是 High Agency 的 Pencil（dev.pencil.desktop），非同一产品。
+# - openemu：该 cask 因 fails_gatekeeper_check 自 2026-09-01 被 Homebrew 禁用。
+# - doubao：cask 版本低于本机（2.19.9 < 2.24.7），安装即降级。
+# - eudic：cask 为 version :latest 且无 sha256，实供版本低于本机（26.5.0 < 26.9.0）。
+# - latexit / tex-live-utility：本机由 MacTeX 装在 root 属主的 /Applications/TeX，brew 会装成第二份。
+# 另：Caskroom 里 docker/handbrake/silicon/squirrel/wireshark 是历史残留目录，brew list --cask 会列出但并非真实安装（真实包为 *-app 版本），不要抄入本清单。
+
 # Mac App Store 应用
 mas "Keynote", id: 409183694
 mas "Blackmagic Disk Speed Test", id: 425264550
