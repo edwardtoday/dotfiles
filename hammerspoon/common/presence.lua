@@ -45,6 +45,9 @@ function M.start(config)
         sendHeartbeat()
         M.timer = hs.timer.doEvery(config.interval, sendHeartbeat)
         M.watcher = watcher
+        M.status = function()
+            return {role = config.role, enabled = enabled}
+        end
         return
     end
 
@@ -83,6 +86,14 @@ function M.start(config)
     server:receive()
 
     M.server = server
+    M.status = function()
+        return {
+            role = config.role,
+            present = mbpPresent,
+            lastHeartbeat = lastHeartbeat,
+            lockedForAbsence = lockedForAbsence
+        }
+    end
     M.timer = hs.timer.doEvery(2, function()
         local now = hs.timer.secondsSinceEpoch()
         if lastHeartbeat then

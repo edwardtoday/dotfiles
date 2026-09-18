@@ -190,6 +190,14 @@ function M.start(config)
     watcher:start()
 
     M.watcher = watcher
+    M.status = function()
+        return {
+            pending = pending ~= nil,
+            switchInFlight = switchInFlight,
+            armed = armed,
+            cooldown = math.max(0, cooldownUntil - hs.timer.secondsSinceEpoch())
+        }
+    end
 end
 
 return M
