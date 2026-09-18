@@ -36,6 +36,7 @@ local function runDDC(config, done)
                 done(false, stdErr or stdOut or "")
             end
         end,
+        nil,
         {"display", config.displayUUID, "set", "input", config.targetInput}
     )
     if not task:start() then
@@ -54,6 +55,7 @@ local function readInput(config, done)
                 done(nil, stdErr or stdOut or "")
             end
         end,
+        nil,
         {"display", config.displayUUID, "get", "input"}
     )
     if not task:start() then
