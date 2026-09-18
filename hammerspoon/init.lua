@@ -1,3 +1,5 @@
+require("hs.ipc")
+
 -- Hammerspoon entrypoint shared by both Macs.
 -- The host role is selected by ~/.hammerspoon-host.
 
