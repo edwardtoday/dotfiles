@@ -64,7 +64,7 @@ end
 
 function M.start()
     -- 用 xpcall 包裹，任何异常都不会中断定时器
-    hs.timer.doEvery(2, function()
+    M.timer = hs.timer.doEvery(2, function()
         local ok, msg = xpcall(M.updateWiredRoute, debug.traceback)
         if not ok then
             hs.printf("[Hammerspoon] updateWiredRoute error: %s", msg)
