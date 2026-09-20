@@ -34,6 +34,9 @@ function M.start(config)
     local initialControllerStatus = controller.status()
     local observedControllerInput = initialControllerStatus.currentInput
     local observedControllerRevision = initialControllerStatus.revision
+    local reversalUntil = 0
+    local reversalTravel = 0
+    local reversalRequests = 0
 
     local movingTowardEdge = config.role == "mbp" and function(dx)
         return dx < 0
@@ -62,6 +65,30 @@ function M.start(config)
     end
 
     local function handleMouse(event)
+        local rawDx = event:getProperty(hs.eventtap.event.properties.mouseEventDeltaX) or 0
+        local now = hs.timer.secondsSinceEpoch()
+
+        -- 物理鼠标连接在 MBP。请求 HDMI 后的短窗口内，直接根据原始
+        -- 向右增量识别“黑屏期间立即回 MBP”，不依赖 UC 映射坐标。
+        if config.reversalTargetInput and now < reversalUntil then
+            if rawDx > 0 then
+                reversalTravel = reversalTravel + rawDx
+                if reversalTravel >= config.cancelDistance then
+                    reversalUntil = 0
+                    reversalTravel = 0
+                    reversalRequests = reversalRequests + 1
+                    controller.request(config.reversalTargetInput)
+                    print("display handoff immediate reversal: " .. config.reversalTargetInput)
+                    return false
+                end
+            elseif rawDx < 0 then
+                reversalTravel = 0
+            end
+        elseif reversalUntil ~= 0 then
+            reversalUntil = 0
+            reversalTravel = 0
+        end
+
         local controllerStatus = controller.status()
         local controllerInput = controllerStatus.currentInput
         local controllerChanged = controllerStatus.revision ~= nil
@@ -103,7 +130,9 @@ function M.start(config)
         end
         lastX = point.x
 
-        local rawDx = event:getProperty(hs.eventtap.event.properties.mouseEventDeltaX) or absoluteDx
+        if rawDx == 0 then
+            rawDx = absoluteDx
+        end
 
         if pending then
             if movingBack(rawDx) then
@@ -129,6 +158,10 @@ function M.start(config)
                 reverseDistance = 0
                 switchAttempts = switchAttempts + 1
                 lastSwitchAt = hs.timer.secondsSinceEpoch()
+                if config.reversalTargetInput then
+                    reversalUntil = lastSwitchAt + config.reversalWindow
+                    reversalTravel = 0
+                end
                 controller.request(config.targetInput)
                 print(string.format(
                     "display handoff requested: %s -> %s (%s)",
@@ -157,6 +190,9 @@ function M.start(config)
             observedControllerInput = observedControllerInput,
             observedControllerRevision = observedControllerRevision,
             reverseDistance = reverseDistance,
+            reversalRemaining = math.max(0, reversalUntil - hs.timer.secondsSinceEpoch()),
+            reversalTravel = reversalTravel,
+            reversalRequests = reversalRequests,
             switchAttempts = switchAttempts,
             lastSwitchAt = lastSwitchAt
         }

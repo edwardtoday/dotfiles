@@ -40,7 +40,9 @@ return {
             targetInput = "17",
             targetLabel = "HDMI1",
             controllerRole = "client",
-            controllerHost = "192.168.233.12"
+            controllerHost = "192.168.233.12",
+            reversalTargetInput = "15",
+            reversalWindow = 2.0
         }),
         presence = {
             role = "sender",
