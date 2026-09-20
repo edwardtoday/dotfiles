@@ -33,8 +33,8 @@ return {
         handoff = merge(common, {
             role = "mbp",
             displayUUID = "C10DADDE-9DE3-45BB-AF23-FFAFDC449029",
-            targetInput = "17",
-            targetLabel = "HDMI1"
+            targetInput = "15",
+            targetLabel = "DisplayPort"
         }),
         presence = {
             role = "sender",
@@ -49,8 +49,8 @@ return {
         handoff = merge(common, {
             role = "m4mini",
             displayUUID = "8AEB4384-2FA7-459D-AA4D-41A9613049E3",
-            targetInput = "15",
-            targetLabel = "DisplayPort"
+            targetInput = "17",
+            targetLabel = "HDMI1"
         }),
         presence = {
             role = "receiver",
