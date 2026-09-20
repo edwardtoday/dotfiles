@@ -42,6 +42,35 @@ local function runDDC(config, done)
 end
 
 function M.start(config)
+    local stateDir = os.getenv("HOME") .. "/Library/Caches/Hammerspoon"
+    local statePath = stateDir .. "/display-handoff-" .. config.role .. ".state"
+
+    local function loadAssumedInput()
+        local file = io.open(statePath, "r")
+        if not file then
+            return nil
+        end
+        local value = tonumber(file:read("*l"))
+        file:close()
+        return value
+    end
+
+    local function saveAssumedInput(value)
+        hs.fs.mkdir(stateDir)
+        local temporaryPath = statePath .. ".tmp"
+        local file = io.open(temporaryPath, "w")
+        if not file then
+            return false
+        end
+        file:write(tostring(value), "\n")
+        file:close()
+        return os.rename(temporaryPath, statePath) == true
+    end
+
+    local function clearAssumedInput()
+        os.remove(statePath)
+    end
+
     local armed = false
     local lastX = nil
     local pending = nil
@@ -52,9 +81,11 @@ function M.start(config)
     local switchAttempts = 0
     local switchSuccesses = 0
     local lastSwitchAt = nil
+    local peerInvalidations = 0
     -- m1ddc 1.2.0 的 `get input` 回读值不稳定，不能用它判断是否需要
     -- 重复 set。记录本进程最近一次成功设置的目标，避免周期性黑屏。
-    local assumedInput = nil
+    local assumedInput = loadAssumedInput()
+    local stateSocket = hs.socket.udp.new()
 
     local movingTowardEdge = config.role == "mbp" and function(dx)
         return dx < 0
@@ -66,7 +97,22 @@ function M.start(config)
         stopTimer(settleTimer)
         settleTimer = nil
         assumedInput = nil
+        clearAssumedInput()
     end
+
+    local statePrefix = config.stateToken .. "|"
+    local stateServer = hs.socket.udp.server(config.statePort, function(data)
+        local peerRole = nil
+        if data and data:sub(1, #statePrefix) == statePrefix then
+            peerRole = data:sub(#statePrefix + 1)
+        end
+        if peerRole and peerRole ~= config.role then
+            peerInvalidations = peerInvalidations + 1
+            markDeparted()
+            print("display handoff peer changed input: " .. peerRole)
+        end
+    end)
+    stateServer:receive()
 
     local function cancelPending(reason, rearm)
         stopTimer(pending)
@@ -95,9 +141,15 @@ function M.start(config)
             switchInFlight = false
             if ok then
                 assumedInput = tonumber(config.targetInput)
+                saveAssumedInput(assumedInput)
                 switchSuccesses = switchSuccesses + 1
                 lastSwitchAt = hs.timer.secondsSinceEpoch()
                 cooldownUntil = hs.timer.secondsSinceEpoch() + config.cooldown
+                stateSocket:send(
+                    config.stateToken .. "|" .. config.role,
+                    config.peerHost,
+                    config.statePort
+                )
                 print(string.format("display handoff applied: input=%s", config.targetInput))
             else
                 armed = true
@@ -231,6 +283,8 @@ function M.start(config)
     watcher:start()
 
     M.watcher = watcher
+    M.stateServer = stateServer
+    M.stateSocket = stateSocket
     M.status = function()
         return {
             pending = pending ~= nil,
@@ -241,7 +295,8 @@ function M.start(config)
             assumedInput = assumedInput,
             switchAttempts = switchAttempts,
             switchSuccesses = switchSuccesses,
-            lastSwitchAt = lastSwitchAt
+            lastSwitchAt = lastSwitchAt,
+            peerInvalidations = peerInvalidations
         }
     end
 end
