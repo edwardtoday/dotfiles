@@ -41,20 +41,6 @@ local function runDDC(config, done)
     done(ok == true, output or "")
 end
 
-local function readInput(config, done)
-    local command = string.format(
-        "%q display %q get input",
-        config.ddc,
-        config.displayUUID
-    )
-    local output, ok = hs.execute(command)
-    if ok then
-        done(tonumber((output or ""):match("%d+")), output or "")
-    else
-        done(nil, output or "")
-    end
-end
-
 function M.start(config)
     local armed = false
     local lastX = nil
@@ -63,6 +49,9 @@ function M.start(config)
     local settleTimer = nil
     local switchInFlight = false
     local cooldownUntil = 0
+    -- m1ddc 1.2.0 的 `get input` 回读值不稳定，不能用它判断是否需要
+    -- 重复 set。记录本进程最近一次成功设置的目标，避免周期性黑屏。
+    local assumedInput = nil
 
     local movingTowardEdge = config.role == "mbp" and function(dx)
         return dx < 0
@@ -87,27 +76,20 @@ function M.start(config)
         end
 
         switchInFlight = true
-        -- 边缘触发和停留收敛都经过这里。先读回当前输入，避免对
-        -- 已经在目标输入的显示器重复 set，造成无意义的黑屏。
-        readInput(config, function(input)
-            if input == tonumber(config.targetInput) then
-                switchInFlight = false
-                return
-            end
+        if assumedInput == tonumber(config.targetInput) then
+            switchInFlight = false
+            return
+        end
 
-            runDDC(config, function(ok)
-                switchInFlight = false
-                if ok then
-                    cooldownUntil = hs.timer.secondsSinceEpoch() + config.cooldown
-                    readInput(config, function(input)
-                        if input then
-                            print(string.format("display handoff readback: input=%s", tostring(input)))
-                        end
-                    end)
-                else
-                    armed = true
-                end
-            end)
+        runDDC(config, function(ok)
+            switchInFlight = false
+            if ok then
+                assumedInput = tonumber(config.targetInput)
+                cooldownUntil = hs.timer.secondsSinceEpoch() + config.cooldown
+                print(string.format("display handoff applied: input=%s", config.targetInput))
+            else
+                armed = true
+            end
         end)
     end
 
@@ -117,16 +99,14 @@ function M.start(config)
             return
         end
 
-        readInput(config, function(input)
-            if input == nil or input == tonumber(config.targetInput) then
-                return
-            end
-            print(string.format(
-                "display handoff reconcile: current=%s target=%s role=%s",
-                tostring(input), config.targetInput, config.role
-            ))
-            startSwitch()
-        end)
+        if assumedInput == tonumber(config.targetInput) then
+            return
+        end
+        print(string.format(
+            "display handoff reconcile: target=%s role=%s",
+            config.targetInput, config.role
+        ))
+        startSwitch()
     end
 
     local function scheduleReconcile()
