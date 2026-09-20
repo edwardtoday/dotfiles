@@ -87,18 +87,27 @@ function M.start(config)
         end
 
         switchInFlight = true
-        runDDC(config, function(ok)
-            switchInFlight = false
-            if ok then
-                cooldownUntil = hs.timer.secondsSinceEpoch() + config.cooldown
-                readInput(config, function(input)
-                    if input then
-                        print(string.format("display handoff readback: input=%s", tostring(input)))
-                    end
-                end)
-            else
-                armed = true
+        -- 边缘触发和停留收敛都经过这里。先读回当前输入，避免对
+        -- 已经在目标输入的显示器重复 set，造成无意义的黑屏。
+        readInput(config, function(input)
+            if input == tonumber(config.targetInput) then
+                switchInFlight = false
+                return
             end
+
+            runDDC(config, function(ok)
+                switchInFlight = false
+                if ok then
+                    cooldownUntil = hs.timer.secondsSinceEpoch() + config.cooldown
+                    readInput(config, function(input)
+                        if input then
+                            print(string.format("display handoff readback: input=%s", tostring(input)))
+                        end
+                    end)
+                else
+                    armed = true
+                end
+            end)
         end)
     end
 
