@@ -197,9 +197,12 @@ function M.start(config)
                     return
                 end
 
-                local _, latestDistance, latestOnDisplay = currentDisplayPosition(config, latestScreen)
+                local latestPoint, latestDistance, latestOnDisplay = currentDisplayPosition(config, latestScreen)
+                local latestFrame = latestScreen:fullFrame()
                 local crossedFromMini = config.role == "m4mini"
-                    and latestDistance <= config.edge + config.cancelDistance
+                    and latestPoint.x >= latestFrame.x + latestFrame.w
+                        - config.edge - config.cancelDistance
+                    and (latestOnDisplay or latestPoint.x > latestFrame.x + latestFrame.w)
                 local stayedOnMBP = config.role == "mbp"
                     and latestOnDisplay
                     and latestDistance <= config.edge + config.cancelDistance
