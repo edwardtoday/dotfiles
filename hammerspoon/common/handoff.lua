@@ -31,6 +31,7 @@ function M.start(config)
     local reverseDistance = 0
     local switchAttempts = 0
     local lastSwitchAt = nil
+    local observedControllerInput = controller.status().currentInput
 
     local movingTowardEdge = config.role == "mbp" and function(dx)
         return dx < 0
@@ -59,6 +60,16 @@ function M.start(config)
     end
 
     local function handleMouse(event)
+        local controllerInput = controller.status().currentInput
+        if controllerInput ~= nil and controllerInput ~= observedControllerInput then
+            observedControllerInput = controllerInput
+            if controllerInput == config.activeInput then
+                -- 显示器刚切到本机时允许立即反向，不要求先深入屏幕再重置。
+                armed = true
+                print("display handoff armed on input activation: " .. controllerInput)
+            end
+        end
+
         if not sourceIsActive() then
             if pending then
                 cancelPending("source input is inactive", false)
@@ -137,6 +148,7 @@ function M.start(config)
             pending = pending ~= nil,
             armed = armed,
             sourceActive = sourceIsActive(),
+            observedControllerInput = observedControllerInput,
             reverseDistance = reverseDistance,
             switchAttempts = switchAttempts,
             lastSwitchAt = lastSwitchAt
