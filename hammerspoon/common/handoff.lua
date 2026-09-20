@@ -23,73 +23,35 @@ end
 
 local function runDDC(config, done)
     print(string.format("display handoff: %s -> %s (%s)", config.role, config.targetLabel, config.targetInput))
-    local finished = false
-    local timeout = nil
-    local task = nil
-
-    local function finish(ok, detail)
-        if finished then
-            return
-        end
-        finished = true
-        stopTimer(timeout)
-        timeout = nil
-        done(ok, detail)
-    end
-
-    task = hs.task.new(
+    -- m1ddc 在 Ghostty 中同步执行正常；这里也走同一条路径，避免
+    -- hs.task 的异步回调在 Universal Control 切屏时卡住状态机。
+    local command = string.format(
+        "%q display %q set input %q",
         config.ddc,
-        function(exitCode, stdOut, stdErr)
-            if exitCode == 0 then
-                finish(true, stdOut or "")
-            else
-                print(string.format(
-                    "display handoff failed: exit=%s stderr=%s stdout=%s",
-                    tostring(exitCode), stdErr or "", stdOut or ""
-                ))
-                finish(false, stdErr or stdOut or "")
-            end
-        end,
-        nil,
-        {"display", config.displayUUID, "set", "input", config.targetInput}
+        config.displayUUID,
+        config.targetInput
     )
-    if not task:start() then
-        print("display handoff failed: unable to start m1ddc")
-        finish(false, "unable to start m1ddc")
-        return task
+    local output, ok, _, exitCode = hs.execute(command)
+    if not ok then
+        print(string.format(
+            "display handoff failed: exit=%s output=%s",
+            tostring(exitCode), output or ""
+        ))
     end
-
-    timeout = hs.timer.doAfter(config.ddcTimeout, function()
-        if finished then
-            return
-        end
-        print("display handoff failed: m1ddc timed out")
-        -- 先释放状态，再尝试终止子进程；即使 terminate API 不可用，
-        -- 也不能让下一次切换永远被 switchInFlight 拦住。
-        finish(false, "m1ddc timed out")
-        pcall(function()
-            task:terminate()
-        end)
-    end)
-
-    return task
+    done(ok == true, output or "")
 end
 
 local function readInput(config, done)
-    local task = hs.task.new(
+    local command = string.format(
+        "%q display %q get input",
         config.ddc,
-        function(exitCode, stdOut, stdErr)
-            if exitCode == 0 then
-                done(tonumber((stdOut or ""):match("%d+")), stdOut or "")
-            else
-                done(nil, stdErr or stdOut or "")
-            end
-        end,
-        nil,
-        {"display", config.displayUUID, "get", "input"}
+        config.displayUUID
     )
-    if not task:start() then
-        done(nil, "unable to start m1ddc readback")
+    local output, ok = hs.execute(command)
+    if ok then
+        done(tonumber((output or ""):match("%d+")), output or "")
+    else
+        done(nil, output or "")
     end
 end
 
@@ -99,7 +61,6 @@ function M.start(config)
     local pending = nil
     local pendingMonitor = nil
     local switchInFlight = false
-    local activeTask = nil
     local cooldownUntil = 0
 
     local movingTowardEdge = config.role == "mbp" and function(dx)
@@ -125,9 +86,8 @@ function M.start(config)
         end
 
         switchInFlight = true
-        activeTask = runDDC(config, function(ok)
+        runDDC(config, function(ok)
             switchInFlight = false
-            activeTask = nil
             if ok then
                 cooldownUntil = hs.timer.secondsSinceEpoch() + config.cooldown
                 readInput(config, function(input)
