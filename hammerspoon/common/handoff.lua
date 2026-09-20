@@ -23,17 +23,31 @@ end
 
 local function runDDC(config, done)
     print(string.format("display handoff: %s -> %s (%s)", config.role, config.targetLabel, config.targetInput))
-    local task = hs.task.new(
+    local finished = false
+    local timeout = nil
+    local task = nil
+
+    local function finish(ok, detail)
+        if finished then
+            return
+        end
+        finished = true
+        stopTimer(timeout)
+        timeout = nil
+        done(ok, detail)
+    end
+
+    task = hs.task.new(
         config.ddc,
         function(exitCode, stdOut, stdErr)
             if exitCode == 0 then
-                done(true, stdOut or "")
+                finish(true, stdOut or "")
             else
                 print(string.format(
                     "display handoff failed: exit=%s stderr=%s stdout=%s",
                     tostring(exitCode), stdErr or "", stdOut or ""
                 ))
-                done(false, stdErr or stdOut or "")
+                finish(false, stdErr or stdOut or "")
             end
         end,
         nil,
@@ -41,8 +55,20 @@ local function runDDC(config, done)
     )
     if not task:start() then
         print("display handoff failed: unable to start m1ddc")
-        done(false, "unable to start m1ddc")
+        finish(false, "unable to start m1ddc")
+        return
     end
+
+    timeout = hs.timer.doAfter(config.ddcTimeout, function()
+        if finished then
+            return
+        end
+        print("display handoff failed: m1ddc timed out")
+        pcall(function()
+            task:terminate()
+        end)
+        finish(false, "m1ddc timed out")
+    end)
 end
 
 local function readInput(config, done)
@@ -121,7 +147,11 @@ function M.start(config)
         end
 
         local _, distance, onDisplay = currentDisplayPosition(config, screen)
-        if not onDisplay or distance > config.edge + config.cancelDistance then
+        -- Universal Control can move the pointer to MBP before the mini-side
+        -- eventtap sees the final event. Keep that intent alive across the
+        -- boundary; a reversal back into the mini still cancels it.
+        if (onDisplay and distance > config.edge + config.cancelDistance)
+            or (config.role ~= "m4mini" and not onDisplay) then
             cancelPending("mouse left the edge", true)
         end
     end
@@ -168,7 +198,12 @@ function M.start(config)
                 end
 
                 local _, latestDistance, latestOnDisplay = currentDisplayPosition(config, latestScreen)
-                if latestOnDisplay and latestDistance <= config.edge + config.cancelDistance then
+                local crossedFromMini = config.role == "m4mini"
+                    and latestDistance <= config.edge + config.cancelDistance
+                local stayedOnMBP = config.role == "mbp"
+                    and latestOnDisplay
+                    and latestDistance <= config.edge + config.cancelDistance
+                if crossedFromMini or stayedOnMBP then
                     startSwitch()
                 else
                     armed = true

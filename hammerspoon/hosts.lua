@@ -13,7 +13,8 @@ local common = {
     rearm = 80,
     cancelDistance = 24,
     delay = 0.45,
-    cooldown = 1.2
+    cooldown = 1.2,
+    ddcTimeout = 5
 }
 
 local function merge(base, extra)
