@@ -56,7 +56,7 @@ local function runDDC(config, done)
     if not task:start() then
         print("display handoff failed: unable to start m1ddc")
         finish(false, "unable to start m1ddc")
-        return
+        return task
     end
 
     timeout = hs.timer.doAfter(config.ddcTimeout, function()
@@ -71,6 +71,8 @@ local function runDDC(config, done)
             task:terminate()
         end)
     end)
+
+    return task
 end
 
 local function readInput(config, done)
@@ -97,6 +99,7 @@ function M.start(config)
     local pending = nil
     local pendingMonitor = nil
     local switchInFlight = false
+    local activeTask = nil
     local cooldownUntil = 0
 
     local movingTowardEdge = config.role == "mbp" and function(dx)
@@ -122,8 +125,9 @@ function M.start(config)
         end
 
         switchInFlight = true
-        runDDC(config, function(ok)
+        activeTask = runDDC(config, function(ok)
             switchInFlight = false
+            activeTask = nil
             if ok then
                 cooldownUntil = hs.timer.secondsSinceEpoch() + config.cooldown
                 readInput(config, function(input)
