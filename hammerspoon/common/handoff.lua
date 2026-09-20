@@ -81,11 +81,9 @@ function M.start(config)
     local switchAttempts = 0
     local switchSuccesses = 0
     local lastSwitchAt = nil
-    local peerInvalidations = 0
     -- m1ddc 1.2.0 的 `get input` 回读值不稳定，不能用它判断是否需要
     -- 重复 set。记录本进程最近一次成功设置的目标，避免周期性黑屏。
     local assumedInput = loadAssumedInput()
-    local stateSocket = hs.socket.udp.new()
 
     local movingTowardEdge = config.role == "mbp" and function(dx)
         return dx < 0
@@ -99,20 +97,6 @@ function M.start(config)
         assumedInput = nil
         clearAssumedInput()
     end
-
-    local statePrefix = config.stateToken .. "|"
-    local stateServer = hs.socket.udp.server(config.statePort, function(data)
-        local peerRole = nil
-        if data and data:sub(1, #statePrefix) == statePrefix then
-            peerRole = data:sub(#statePrefix + 1)
-        end
-        if peerRole and peerRole ~= config.role then
-            peerInvalidations = peerInvalidations + 1
-            markDeparted()
-            print("display handoff peer changed input: " .. peerRole)
-        end
-    end)
-    stateServer:receive()
 
     local function cancelPending(reason, rearm)
         stopTimer(pending)
@@ -145,11 +129,6 @@ function M.start(config)
                 switchSuccesses = switchSuccesses + 1
                 lastSwitchAt = hs.timer.secondsSinceEpoch()
                 cooldownUntil = hs.timer.secondsSinceEpoch() + config.cooldown
-                stateSocket:send(
-                    config.stateToken .. "|" .. config.role,
-                    config.peerHost,
-                    config.statePort
-                )
                 print(string.format("display handoff applied: input=%s", config.targetInput))
             else
                 armed = true
@@ -261,8 +240,11 @@ function M.start(config)
                     markDeparted()
                     print("display handoff departed: m4mini")
                 elseif stayedOnMBP then
-                    -- 光标仍停在边缘，等待目的机器实际收到鼠标事件后再切换。
-                    print("display handoff waiting at edge: mbp")
+                    markDeparted()
+                    print("display handoff departed: mbp")
+                elseif config.role == "mbp" and not latestOnDisplay then
+                    markDeparted()
+                    print("display handoff departed: mbp")
                 else
                     armed = true
                     print("display handoff cancelled: mouse did not remain at edge")
@@ -283,8 +265,6 @@ function M.start(config)
     watcher:start()
 
     M.watcher = watcher
-    M.stateServer = stateServer
-    M.stateSocket = stateSocket
     M.status = function()
         return {
             pending = pending ~= nil,
@@ -295,8 +275,7 @@ function M.start(config)
             assumedInput = assumedInput,
             switchAttempts = switchAttempts,
             switchSuccesses = switchSuccesses,
-            lastSwitchAt = lastSwitchAt,
-            peerInvalidations = peerInvalidations
+            lastSwitchAt = lastSwitchAt
         }
     end
 end

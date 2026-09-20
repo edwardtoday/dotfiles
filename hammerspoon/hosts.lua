@@ -15,9 +15,7 @@ local common = {
     delay = 0.45,
     settleDelay = 0.35,
     cooldown = 1.2,
-    ddcTimeout = 5,
-    statePort = 48532,
-    stateToken = localConfig.presenceToken
+    ddcTimeout = 5
 }
 
 local function merge(base, extra)
@@ -37,8 +35,7 @@ return {
             role = "mbp",
             displayUUID = "C10DADDE-9DE3-45BB-AF23-FFAFDC449029",
             targetInput = "15",
-            targetLabel = "DisplayPort",
-            peerHost = "192.168.233.12"
+            targetLabel = "DisplayPort"
         }),
         presence = {
             role = "sender",
@@ -54,8 +51,7 @@ return {
             role = "m4mini",
             displayUUID = "8AEB4384-2FA7-459D-AA4D-41A9613049E3",
             targetInput = "17",
-            targetLabel = "HDMI1",
-            peerHost = "192.168.233.3"
+            targetLabel = "HDMI1"
         }),
         presence = {
             role = "receiver",
