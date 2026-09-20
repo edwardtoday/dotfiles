@@ -49,6 +49,9 @@ function M.start(config)
     local settleTimer = nil
     local switchInFlight = false
     local cooldownUntil = 0
+    local switchAttempts = 0
+    local switchSuccesses = 0
+    local lastSwitchAt = nil
     -- m1ddc 1.2.0 的 `get input` 回读值不稳定，不能用它判断是否需要
     -- 重复 set。记录本进程最近一次成功设置的目标，避免周期性黑屏。
     local assumedInput = nil
@@ -57,6 +60,12 @@ function M.start(config)
         return dx < 0
     end or function(dx)
         return dx > 0
+    end
+
+    local function markDeparted()
+        stopTimer(settleTimer)
+        settleTimer = nil
+        assumedInput = nil
     end
 
     local function cancelPending(reason, rearm)
@@ -81,10 +90,13 @@ function M.start(config)
             return
         end
 
+        switchAttempts = switchAttempts + 1
         runDDC(config, function(ok)
             switchInFlight = false
             if ok then
                 assumedInput = tonumber(config.targetInput)
+                switchSuccesses = switchSuccesses + 1
+                lastSwitchAt = hs.timer.secondsSinceEpoch()
                 cooldownUntil = hs.timer.secondsSinceEpoch() + config.cooldown
                 print(string.format("display handoff applied: input=%s", config.targetInput))
             else
@@ -131,6 +143,9 @@ function M.start(config)
         -- boundary; a reversal back into the mini still cancels it.
         if (onDisplay and distance > config.edge + config.cancelDistance)
             or (config.role ~= "m4mini" and not onDisplay) then
+            if not onDisplay then
+                markDeparted()
+            end
             cancelPending("mouse left the edge", true)
         end
     end
@@ -144,6 +159,7 @@ function M.start(config)
 
         local _, distance, onDisplay = currentDisplayPosition(config, screen)
         if not onDisplay then
+            markDeparted()
             lastX = nil
             return false
         end
@@ -189,8 +205,12 @@ function M.start(config)
                 local stayedOnMBP = config.role == "mbp"
                     and latestOnDisplay
                     and latestDistance <= config.edge + config.cancelDistance
-                if crossedFromMini or stayedOnMBP then
-                    startSwitch()
+                if crossedFromMini then
+                    markDeparted()
+                    print("display handoff departed: m4mini")
+                elseif stayedOnMBP then
+                    -- 光标仍停在边缘，等待目的机器实际收到鼠标事件后再切换。
+                    print("display handoff waiting at edge: mbp")
                 else
                     armed = true
                     print("display handoff cancelled: mouse did not remain at edge")
@@ -217,7 +237,11 @@ function M.start(config)
             reconcilePending = settleTimer ~= nil,
             switchInFlight = switchInFlight,
             armed = armed,
-            cooldown = math.max(0, cooldownUntil - hs.timer.secondsSinceEpoch())
+            cooldown = math.max(0, cooldownUntil - hs.timer.secondsSinceEpoch()),
+            assumedInput = assumedInput,
+            switchAttempts = switchAttempts,
+            switchSuccesses = switchSuccesses,
+            lastSwitchAt = lastSwitchAt
         }
     end
 end
