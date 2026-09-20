@@ -60,6 +60,7 @@ function M.start(config)
     local lastX = nil
     local pending = nil
     local pendingMonitor = nil
+    local settleTimer = nil
     local switchInFlight = false
     local cooldownUntil = 0
 
@@ -101,6 +102,29 @@ function M.start(config)
         end)
     end
 
+    local function reconcileInput()
+        settleTimer = nil
+        if switchInFlight or hs.timer.secondsSinceEpoch() < cooldownUntil then
+            return
+        end
+
+        readInput(config, function(input)
+            if input == nil or input == tonumber(config.targetInput) then
+                return
+            end
+            print(string.format(
+                "display handoff reconcile: current=%s target=%s role=%s",
+                tostring(input), config.targetInput, config.role
+            ))
+            startSwitch()
+        end)
+    end
+
+    local function scheduleReconcile()
+        stopTimer(settleTimer)
+        settleTimer = hs.timer.doAfter(config.settleDelay, reconcileInput)
+    end
+
     local function cancelIfMouseMovedBack()
         if not pending then
             return
@@ -136,6 +160,10 @@ function M.start(config)
         end
 
         local point = hs.mouse.absolutePosition()
+        -- Universal Control may return the pointer to this Mac without
+        -- touching this display's edge again. Once the pointer settles on
+        -- this host, converge the DDC input to this host's target.
+        scheduleReconcile()
         if distance > config.rearm then
             armed = true
         end
@@ -197,6 +225,7 @@ function M.start(config)
     M.status = function()
         return {
             pending = pending ~= nil,
+            reconcilePending = settleTimer ~= nil,
             switchInFlight = switchInFlight,
             armed = armed,
             cooldown = math.max(0, cooldownUntil - hs.timer.secondsSinceEpoch())

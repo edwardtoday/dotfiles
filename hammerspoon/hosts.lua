@@ -13,6 +13,7 @@ local common = {
     rearm = 80,
     cancelDistance = 24,
     delay = 0.45,
+    settleDelay = 0.35,
     cooldown = 1.2,
     ddcTimeout = 5
 }
