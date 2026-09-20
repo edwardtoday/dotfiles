@@ -57,26 +57,67 @@ function M.start(config)
     if config.controllerRole == "server" then
         local statePath = os.getenv("HOME") .. "/Library/Caches/Hammerspoon/display-input.state"
         local currentInput = loadState(statePath)
+        local desiredInput = nil
+        local retryTimer = nil
+        local retryCount = 0
+        local failedAttempts = 0
 
-        local function apply(targetInput)
-            requests = requests + 1
-            lastTarget = targetInput
+        local attemptApply
+        attemptApply = function()
+            if not desiredInput then
+                return true
+            end
+
+            local targetInput = desiredInput
             if currentInput == targetInput then
                 skipped = skipped + 1
+                desiredInput = nil
+                retryCount = 0
                 print("display input unchanged: " .. targetInput)
                 return true
             end
 
-            print(string.format("display input apply: %s", targetInput))
-            if not runDDC(config, targetInput) then
-                return false
+            print(string.format(
+                "display input apply: %s attempt=%s",
+                targetInput, tostring(retryCount + 1)
+            ))
+            if runDDC(config, targetInput) then
+                currentInput = targetInput
+                saveState(statePath, currentInput)
+                switches = switches + 1
+                revision = revision + 1
+                desiredInput = nil
+                retryCount = 0
+                return true
             end
 
-            currentInput = targetInput
-            saveState(statePath, currentInput)
-            switches = switches + 1
-            revision = revision + 1
-            return true
+            failedAttempts = failedAttempts + 1
+            retryCount = retryCount + 1
+            if retryCount < config.controllerMaxAttempts then
+                retryTimer = hs.timer.doAfter(config.controllerRetryDelay, function()
+                    retryTimer = nil
+                    attemptApply()
+                end)
+            else
+                print("display input retry exhausted: " .. targetInput)
+                desiredInput = nil
+                retryCount = 0
+            end
+            return false
+        end
+
+        local function apply(targetInput)
+            requests = requests + 1
+            lastTarget = targetInput
+            if retryTimer then
+                retryTimer:stop()
+                retryTimer = nil
+            end
+            if desiredInput ~= targetInput then
+                retryCount = 0
+            end
+            desiredInput = targetInput
+            return attemptApply()
         end
 
         local prefix = config.controllerToken .. "|"
@@ -101,11 +142,15 @@ function M.start(config)
             return {
                 role = config.controllerRole,
                 currentInput = currentInput,
+                desiredInput = desiredInput,
                 requests = requests,
                 switches = switches,
                 skipped = skipped,
                 lastTarget = lastTarget,
-                revision = revision
+                revision = revision,
+                retryPending = retryTimer ~= nil,
+                retryCount = retryCount,
+                failedAttempts = failedAttempts
             }
         end
         return

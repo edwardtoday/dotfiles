@@ -15,6 +15,8 @@ local common = {
     delay = 0.45,
     controllerPort = 48532,
     controllerToken = localConfig.presenceToken,
+    controllerRetryDelay = 0.5,
+    controllerMaxAttempts = 6,
     allowedInputs = { ["15"] = true, ["17"] = true }
 }
 
