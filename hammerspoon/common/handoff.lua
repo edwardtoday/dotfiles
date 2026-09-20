@@ -64,10 +64,12 @@ local function runDDC(config, done)
             return
         end
         print("display handoff failed: m1ddc timed out")
+        -- 先释放状态，再尝试终止子进程；即使 terminate API 不可用，
+        -- 也不能让下一次切换永远被 switchInFlight 拦住。
+        finish(false, "m1ddc timed out")
         pcall(function()
             task:terminate()
         end)
-        finish(false, "m1ddc timed out")
     end)
 end
 
