@@ -21,81 +21,21 @@ local function currentDisplayPosition(config, screen)
     return point, distance, onDisplay
 end
 
-local function runDDC(config, done)
-    print(string.format("display handoff: %s -> %s (%s)", config.role, config.targetLabel, config.targetInput))
-    -- m1ddc 在 Ghostty 中同步执行正常；这里也走同一条路径，避免
-    -- hs.task 的异步回调在 Universal Control 切屏时卡住状态机。
-    local command = string.format(
-        "%q display %q set input %q",
-        config.ddc,
-        config.displayUUID,
-        config.targetInput
-    )
-    local output, ok, _, exitCode = hs.execute(command)
-    if not ok then
-        print(string.format(
-            "display handoff failed: exit=%s output=%s",
-            tostring(exitCode), output or ""
-        ))
-    end
-    done(ok == true, output or "")
-end
-
 function M.start(config)
-    local stateDir = os.getenv("HOME") .. "/Library/Caches/Hammerspoon"
-    local statePath = stateDir .. "/display-handoff-" .. config.role .. ".state"
-
-    local function loadAssumedInput()
-        local file = io.open(statePath, "r")
-        if not file then
-            return nil
-        end
-        local value = tonumber(file:read("*l"))
-        file:close()
-        return value
-    end
-
-    local function saveAssumedInput(value)
-        hs.fs.mkdir(stateDir)
-        local temporaryPath = statePath .. ".tmp"
-        local file = io.open(temporaryPath, "w")
-        if not file then
-            return false
-        end
-        file:write(tostring(value), "\n")
-        file:close()
-        return os.rename(temporaryPath, statePath) == true
-    end
-
-    local function clearAssumedInput()
-        os.remove(statePath)
-    end
+    local controller = require("input_controller")
+    controller.start(config)
 
     local armed = false
     local lastX = nil
     local pending = nil
     local pendingMonitor = nil
-    local settleTimer = nil
-    local switchInFlight = false
-    local cooldownUntil = 0
     local switchAttempts = 0
-    local switchSuccesses = 0
     local lastSwitchAt = nil
-    -- m1ddc 1.2.0 的 `get input` 回读值不稳定，不能用它判断是否需要
-    -- 重复 set。记录本进程最近一次成功设置的目标，避免周期性黑屏。
-    local assumedInput = loadAssumedInput()
 
     local movingTowardEdge = config.role == "mbp" and function(dx)
         return dx < 0
     end or function(dx)
         return dx > 0
-    end
-
-    local function markDeparted()
-        stopTimer(settleTimer)
-        settleTimer = nil
-        assumedInput = nil
-        clearAssumedInput()
     end
 
     local function cancelPending(reason, rearm)
@@ -107,54 +47,6 @@ function M.start(config)
             armed = true
         end
         print("display handoff cancelled: " .. reason)
-    end
-
-    local function startSwitch()
-        if switchInFlight then
-            return
-        end
-
-        switchInFlight = true
-        if assumedInput == tonumber(config.targetInput) then
-            switchInFlight = false
-            return
-        end
-
-        switchAttempts = switchAttempts + 1
-        runDDC(config, function(ok)
-            switchInFlight = false
-            if ok then
-                assumedInput = tonumber(config.targetInput)
-                saveAssumedInput(assumedInput)
-                switchSuccesses = switchSuccesses + 1
-                lastSwitchAt = hs.timer.secondsSinceEpoch()
-                cooldownUntil = hs.timer.secondsSinceEpoch() + config.cooldown
-                print(string.format("display handoff applied: input=%s", config.targetInput))
-            else
-                armed = true
-            end
-        end)
-    end
-
-    local function reconcileInput()
-        settleTimer = nil
-        if switchInFlight or hs.timer.secondsSinceEpoch() < cooldownUntil then
-            return
-        end
-
-        if assumedInput == tonumber(config.targetInput) then
-            return
-        end
-        print(string.format(
-            "display handoff reconcile: target=%s role=%s",
-            config.targetInput, config.role
-        ))
-        startSwitch()
-    end
-
-    local function scheduleReconcile()
-        stopTimer(settleTimer)
-        settleTimer = hs.timer.doAfter(config.settleDelay, reconcileInput)
     end
 
     local function cancelIfMouseMovedBack()
@@ -169,15 +61,8 @@ function M.start(config)
         end
 
         local _, distance, onDisplay = currentDisplayPosition(config, screen)
-        -- Universal Control can move the pointer to MBP before the mini-side
-        -- eventtap sees the final event. Keep that intent alive across the
-        -- boundary; a reversal back into the mini still cancels it.
-        if (onDisplay and distance > config.edge + config.cancelDistance)
-            or (config.role ~= "m4mini" and not onDisplay) then
-            if not onDisplay then
-                markDeparted()
-            end
-            cancelPending("mouse left the edge", true)
+        if onDisplay and distance > config.edge + config.cancelDistance then
+            cancelPending("mouse moved back", true)
         end
     end
 
@@ -188,18 +73,12 @@ function M.start(config)
             return false
         end
 
-        local _, distance, onDisplay = currentDisplayPosition(config, screen)
+        local point, distance, onDisplay = currentDisplayPosition(config, screen)
         if not onDisplay then
-            markDeparted()
             lastX = nil
             return false
         end
 
-        local point = hs.mouse.absolutePosition()
-        -- Universal Control may return the pointer to this Mac without
-        -- touching this display's edge again. Once the pointer settles on
-        -- this host, converge the DDC input to this host's target.
-        scheduleReconcile()
         if distance > config.rearm then
             armed = true
         end
@@ -209,10 +88,6 @@ function M.start(config)
             dx = point.x - lastX
         end
         lastX = point.x
-
-        if hs.timer.secondsSinceEpoch() < cooldownUntil or switchInFlight then
-            return false
-        end
 
         if armed and not pending and distance <= config.edge and movingTowardEdge(dx) then
             armed = false
@@ -227,28 +102,20 @@ function M.start(config)
                     return
                 end
 
-                local latestPoint, latestDistance, latestOnDisplay = currentDisplayPosition(config, latestScreen)
-                local latestFrame = latestScreen:fullFrame()
-                local crossedFromMini = config.role == "m4mini"
-                    and latestPoint.x >= latestFrame.x + latestFrame.w
-                        - config.edge - config.cancelDistance
-                    and (latestOnDisplay or latestPoint.x > latestFrame.x + latestFrame.w)
-                local stayedOnMBP = config.role == "mbp"
-                    and latestOnDisplay
-                    and latestDistance <= config.edge + config.cancelDistance
-                if crossedFromMini then
-                    markDeparted()
-                    print("display handoff departed: m4mini")
-                elseif stayedOnMBP then
-                    markDeparted()
-                    print("display handoff departed: mbp")
-                elseif config.role == "mbp" and not latestOnDisplay then
-                    markDeparted()
-                    print("display handoff departed: mbp")
-                else
+                local _, latestDistance, latestOnDisplay = currentDisplayPosition(config, latestScreen)
+                if latestOnDisplay and latestDistance > config.edge + config.cancelDistance then
                     armed = true
-                    print("display handoff cancelled: mouse did not remain at edge")
+                    print("display handoff cancelled: mouse did not cross edge")
+                    return
                 end
+
+                switchAttempts = switchAttempts + 1
+                lastSwitchAt = hs.timer.secondsSinceEpoch()
+                controller.request(config.targetInput)
+                print(string.format(
+                    "display handoff requested: %s -> %s (%s)",
+                    config.role, config.targetLabel, config.targetInput
+                ))
             end)
             pendingMonitor = hs.timer.doEvery(0.05, cancelIfMouseMovedBack)
             print("display handoff pending: " .. config.role)
@@ -268,13 +135,8 @@ function M.start(config)
     M.status = function()
         return {
             pending = pending ~= nil,
-            reconcilePending = settleTimer ~= nil,
-            switchInFlight = switchInFlight,
             armed = armed,
-            cooldown = math.max(0, cooldownUntil - hs.timer.secondsSinceEpoch()),
-            assumedInput = assumedInput,
             switchAttempts = switchAttempts,
-            switchSuccesses = switchSuccesses,
             lastSwitchAt = lastSwitchAt
         }
     end

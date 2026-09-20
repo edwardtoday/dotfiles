@@ -13,9 +13,9 @@ local common = {
     rearm = 80,
     cancelDistance = 24,
     delay = 0.45,
-    settleDelay = 0.35,
-    cooldown = 1.2,
-    ddcTimeout = 5
+    controllerPort = 48532,
+    controllerToken = localConfig.presenceToken,
+    allowedInputs = { ["15"] = true, ["17"] = true }
 }
 
 local function merge(base, extra)
@@ -34,8 +34,10 @@ return {
         handoff = merge(common, {
             role = "mbp",
             displayUUID = "C10DADDE-9DE3-45BB-AF23-FFAFDC449029",
-            targetInput = "15",
-            targetLabel = "DisplayPort"
+            targetInput = "17",
+            targetLabel = "HDMI1",
+            controllerRole = "client",
+            controllerHost = "192.168.233.12"
         }),
         presence = {
             role = "sender",
@@ -50,8 +52,9 @@ return {
         handoff = merge(common, {
             role = "m4mini",
             displayUUID = "8AEB4384-2FA7-459D-AA4D-41A9613049E3",
-            targetInput = "17",
-            targetLabel = "HDMI1"
+            targetInput = "15",
+            targetLabel = "DisplayPort",
+            controllerRole = "server"
         }),
         presence = {
             role = "receiver",
