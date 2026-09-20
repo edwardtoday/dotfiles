@@ -6,9 +6,10 @@
 
 # Typography
 font-family = "Maple Mono NF CN"
-font-size = 14
+font-size = 16
 font-thicken = true
-adjust-cell-height = 2
+font-thicken-strength=1
+adjust-cell-height = 1
 adjust-cursor-thickness = 175%
 
 # https://ghostty.org/docs/config/reference#font-feature
@@ -19,19 +20,24 @@ adjust-cursor-thickness = 175%
 font-feature = -dlig
 
 # Theme and colors
+theme = Catppuccin Mocha
 # theme = dark:Catppuccin Mocha,light:Catppuccin Latte
-theme = dark:Catppuccin Mocha,light:Ayu Light
 
 # Window and appearance
 alpha-blending = linear-corrected
 background-opacity = 0.95
-background-blur = 30
+background-blur = 16
 macos-titlebar-style = transparent
 window-colorspace = display-p3
 window-padding-x = 10
 window-padding-y = 8
+window-padding-balance = true
 window-save-state = always
 window-theme = auto
+unfocused-split-opacity = 0.6
+
+# Contrast
+minimum-contrast = 1.3
 
 # Cursor
 cursor-style = bar
@@ -54,6 +60,9 @@ clipboard-paste-bracketed-safe = true
 
 # Shell integration
 shell-integration = detect
+
+# macOS
+macos-option-as-alt = left
 
 # Keybindings: tabs
 keybind = cmd+t=new_tab
