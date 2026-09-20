@@ -52,6 +52,7 @@ function M.start(config)
     local switches = 0
     local skipped = 0
     local lastTarget = nil
+    local revision = 0
 
     if config.controllerRole == "server" then
         local statePath = os.getenv("HOME") .. "/Library/Caches/Hammerspoon/display-input.state"
@@ -74,6 +75,7 @@ function M.start(config)
             currentInput = targetInput
             saveState(statePath, currentInput)
             switches = switches + 1
+            revision = revision + 1
             return true
         end
 
@@ -102,7 +104,8 @@ function M.start(config)
                 requests = requests,
                 switches = switches,
                 skipped = skipped,
-                lastTarget = lastTarget
+                lastTarget = lastTarget,
+                revision = revision
             }
         end
         return

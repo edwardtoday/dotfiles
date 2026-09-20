@@ -31,7 +31,9 @@ function M.start(config)
     local reverseDistance = 0
     local switchAttempts = 0
     local lastSwitchAt = nil
-    local observedControllerInput = controller.status().currentInput
+    local initialControllerStatus = controller.status()
+    local observedControllerInput = initialControllerStatus.currentInput
+    local observedControllerRevision = initialControllerStatus.revision
 
     local movingTowardEdge = config.role == "mbp" and function(dx)
         return dx < 0
@@ -60,8 +62,12 @@ function M.start(config)
     end
 
     local function handleMouse(event)
-        local controllerInput = controller.status().currentInput
-        if controllerInput ~= nil and controllerInput ~= observedControllerInput then
+        local controllerStatus = controller.status()
+        local controllerInput = controllerStatus.currentInput
+        local controllerChanged = controllerStatus.revision ~= nil
+            and controllerStatus.revision ~= observedControllerRevision
+        if controllerChanged then
+            observedControllerRevision = controllerStatus.revision
             observedControllerInput = controllerInput
             if controllerInput == config.activeInput then
                 -- 显示器刚切到本机时允许立即反向，不要求先深入屏幕再重置。
@@ -149,6 +155,7 @@ function M.start(config)
             armed = armed,
             sourceActive = sourceIsActive(),
             observedControllerInput = observedControllerInput,
+            observedControllerRevision = observedControllerRevision,
             reverseDistance = reverseDistance,
             switchAttempts = switchAttempts,
             lastSwitchAt = lastSwitchAt
