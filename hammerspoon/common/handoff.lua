@@ -28,7 +28,7 @@ function M.start(config)
     local armed = false
     local lastX = nil
     local pending = nil
-    local pendingMonitor = nil
+    local reverseDistance = 0
     local switchAttempts = 0
     local lastSwitchAt = nil
 
@@ -37,36 +37,37 @@ function M.start(config)
     end or function(dx)
         return dx > 0
     end
+    local movingBack = config.role == "mbp" and function(dx)
+        return dx > 0
+    end or function(dx)
+        return dx < 0
+    end
 
     local function cancelPending(reason, rearm)
         stopTimer(pending)
-        stopTimer(pendingMonitor)
         pending = nil
-        pendingMonitor = nil
+        reverseDistance = 0
         if rearm then
             armed = true
         end
         print("display handoff cancelled: " .. reason)
     end
 
-    local function cancelIfMouseMovedBack()
-        if not pending then
-            return
-        end
-
-        local screen = displayFor(config)
-        if not screen then
-            cancelPending("display disappeared", true)
-            return
-        end
-
-        local _, distance, onDisplay = currentDisplayPosition(config, screen)
-        if onDisplay and distance > config.edge + config.cancelDistance then
-            cancelPending("mouse moved back", true)
-        end
+    local function sourceIsActive()
+        local active = controller.isCurrent(config.activeInput)
+        return active == nil or active == true
     end
 
-    local function handleMouse()
+    local function handleMouse(event)
+        if not sourceIsActive() then
+            if pending then
+                cancelPending("source input is inactive", false)
+            end
+            armed = false
+            lastX = nil
+            return false
+        end
+
         local screen = displayFor(config)
         if not screen then
             lastX = nil
@@ -79,36 +80,36 @@ function M.start(config)
             return false
         end
 
+        local absoluteDx = 0
+        if lastX then
+            absoluteDx = point.x - lastX
+        end
+        lastX = point.x
+
+        local rawDx = event:getProperty(hs.eventtap.event.properties.mouseEventDeltaX) or absoluteDx
+
+        if pending then
+            if movingBack(rawDx) then
+                reverseDistance = reverseDistance + math.abs(rawDx)
+                if reverseDistance >= config.cancelDistance then
+                    cancelPending("mouse moved back", true)
+                end
+            elseif movingTowardEdge(rawDx) then
+                reverseDistance = 0
+            end
+            return false
+        end
+
         if distance > config.rearm then
             armed = true
         end
 
-        local dx = 0
-        if lastX then
-            dx = point.x - lastX
-        end
-        lastX = point.x
-
-        if armed and not pending and distance <= config.edge and movingTowardEdge(dx) then
+        if armed and distance <= config.edge and movingTowardEdge(rawDx) then
             armed = false
+            reverseDistance = 0
             pending = hs.timer.doAfter(config.delay, function()
-                stopTimer(pendingMonitor)
-                pendingMonitor = nil
                 pending = nil
-
-                local latestScreen = displayFor(config)
-                if not latestScreen then
-                    armed = true
-                    return
-                end
-
-                local _, latestDistance, latestOnDisplay = currentDisplayPosition(config, latestScreen)
-                if latestOnDisplay and latestDistance > config.edge + config.cancelDistance then
-                    armed = true
-                    print("display handoff cancelled: mouse did not cross edge")
-                    return
-                end
-
+                reverseDistance = 0
                 switchAttempts = switchAttempts + 1
                 lastSwitchAt = hs.timer.secondsSinceEpoch()
                 controller.request(config.targetInput)
@@ -117,7 +118,6 @@ function M.start(config)
                     config.role, config.targetLabel, config.targetInput
                 ))
             end)
-            pendingMonitor = hs.timer.doEvery(0.05, cancelIfMouseMovedBack)
             print("display handoff pending: " .. config.role)
         end
 
@@ -136,6 +136,8 @@ function M.start(config)
         return {
             pending = pending ~= nil,
             armed = armed,
+            sourceActive = sourceIsActive(),
+            reverseDistance = reverseDistance,
             switchAttempts = switchAttempts,
             lastSwitchAt = lastSwitchAt
         }

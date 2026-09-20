@@ -92,6 +92,9 @@ function M.start(config)
 
         M.server = server
         M.request = apply
+        M.isCurrent = function(input)
+            return currentInput == input
+        end
         M.status = function()
             return {
                 role = config.controllerRole,
@@ -109,6 +112,9 @@ function M.start(config)
     local retryTimer = nil
 
     M.socket = socket
+    M.isCurrent = function()
+        return nil
+    end
     M.request = function(targetInput)
         requests = requests + 1
         lastTarget = targetInput
