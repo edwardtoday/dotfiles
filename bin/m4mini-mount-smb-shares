@@ -1,0 +1,47 @@
+#!/bin/zsh
+
+setopt no_nomatch
+set -u
+
+PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
+
+log_dir="$HOME/Library/Logs"
+log_file="$log_dir/io.qingpei.smb-mounts.log"
+mkdir -p "$log_dir"
+
+typeset -a shares=(
+  'yf@192.168.158.188/proj|/Volumes/proj'
+  'yf@192.168.30.65/yf1|/Volumes/yf1'
+  'uid08033@192.168.4.52/did1000|/Volumes/did1000'
+  'uid08033@192.168.4.59/did1000/LED_YJY|/Volumes/LED_YJY'
+)
+
+log() {
+  print -r -- "$(date '+%Y-%m-%dT%H:%M:%S%z') $*" >> "$log_file"
+}
+
+is_mounted() {
+  /sbin/mount | /usr/bin/grep -F " on $1 " >/dev/null 2>&1
+}
+
+for entry in "${shares[@]}"; do
+  url="${entry%%|*}"
+  mountpoint="${entry#*|}"
+
+  if is_mounted "$mountpoint"; then
+    log "already-mounted $mountpoint"
+    continue
+  fi
+
+  if [[ ! -d "$mountpoint" ]]; then
+    log "missing-mountpoint $mountpoint"
+    continue
+  fi
+
+  if /sbin/mount_smbfs -N "//$url" "$mountpoint" >> "$log_file" 2>&1; then
+    log "mounted $mountpoint"
+  else
+    log "mount-failed $mountpoint"
+  fi
+done
