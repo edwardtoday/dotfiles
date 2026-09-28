@@ -11,7 +11,13 @@ require 'fileutils'
 home = File.expand_path('~')
 repo_root = File.expand_path(File.dirname(__FILE__))
 
+# These directories contain host-local runtime state.  In particular, CC
+# Switch and Codex mutate ~/.codex/config.toml, so linking the whole directory
+# would make one machine overwrite another machine's paths and providers.
+machine_local_dirs = %w[codex]
+
 run_bootstrap = ARGV.delete('--bootstrap')
+restore_agent_skills = !ARGV.delete('--skip-agent-skills')
 
 def ensure_symlink(source, target)
   if File.symlink?(target)
@@ -24,12 +30,39 @@ def ensure_symlink(source, target)
   FileUtils.ln_sf(source, target)
 end
 
-Dir['*'].each do |file|
-  next if file =~ /install/ || file =~ /README/ || file == 'config'
+Dir.children(repo_root).each do |file|
+  next if file.start_with?('.')
+  next if file =~ /install/ || file =~ /README/ || file == 'config' || machine_local_dirs.include?(file)
 
   source = File.expand_path(file, repo_root)
   target = File.join(home, ".#{file}")
   ensure_symlink(source, target)
+end
+
+# Initialize only the portable Codex helpers inside a real, host-local
+# ~/.codex directory.  Existing runtime config remains untouched because it
+# is edited by Codex and CC Switch and may contain machine-specific paths.
+codex_dir = File.join(home, '.codex')
+if !File.symlink?(codex_dir)
+  FileUtils.mkdir_p(codex_dir)
+
+  common_source = File.join(repo_root, 'codex', 'config.common.toml')
+  common_target = File.join(codex_dir, 'config.common.toml')
+  ensure_symlink(common_source, common_target) if File.file?(common_source) && !File.exist?(common_target)
+
+  index_source = File.join(repo_root, 'codex', 'update-project-index.py')
+  index_target = File.join(codex_dir, 'update-project-index.py')
+  ensure_symlink(index_source, index_target) if File.file?(index_source) && !File.exist?(index_target)
+
+  projects_source = File.join(repo_root, 'codex', 'projects.local.toml.example')
+  projects_target = File.join(codex_dir, 'projects.local.toml')
+  if File.file?(projects_source) && !File.exist?(projects_target)
+    FileUtils.cp(projects_source, projects_target)
+    FileUtils.chmod(0o600, projects_target)
+    puts "[install] created host-local #{projects_target}; review paths before use"
+  end
+else
+  puts "[install] skip #{codex_dir}: existing symlink is host-managed"
 end
 
 config_src = File.join(repo_root, 'config')
@@ -66,7 +99,11 @@ elsif File.directory?(init_dir)
 end
 
 agents_restore = File.join(repo_root, 'bin', 'agents-skills-restore')
-if File.executable?(agents_restore)
+if restore_agent_skills && File.executable?(agents_restore)
   puts "[install] restoring managed agent skills"
-  system(agents_restore, '--adopt') || abort('[install] managed agent skills restore failed')
+  unless system(agents_restore, '--adopt')
+    warn '[install] managed agent skills restore failed; dotfiles initialization completed, retry after GitHub credentials are available'
+  end
+elsif !restore_agent_skills
+  puts '[install] skipping managed agent skills (--skip-agent-skills)'
 end
