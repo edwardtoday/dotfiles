@@ -34,6 +34,19 @@
       "dependencies": []
     },
     {
+      "tree_sha256": "dd064eba300bf12e126206432665499ebab50305722f638b9aba657947dbddde",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/dd064eba300bf12e126206432665499ebab50305722f638b9aba657947dbddde.tar.gz",
+      "archive_sha256": "c1c84e727a202403c269716d857d37cb0e04f9ebc0be27985b483a21772924e1",
+      "name": "agent-reach",
+      "runtime_path": "/Users/qingpei/.agents/skills/agent-reach",
+      "source_path": "/Users/qingpei/.agents/skills/agent-reach",
+      "origin": {
+        "kind": "unrecorded",
+        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+      },
+      "dependencies": []
+    },
+    {
       "tree_sha256": "305050113f7d5b4eb5b2222585d66f98954dceaf5ceb41c2ab6b5f2bce4e6e12",
       "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/305050113f7d5b4eb5b2222585d66f98954dceaf5ceb41c2ab6b5f2bce4e6e12.tar.gz",
       "archive_sha256": "7891b5e41407b859420d0473127e7f5d6b9c7f46e5e4fb3c4aa1a2535cc13c5c",
@@ -94,6 +107,21 @@
         "revision": "f2ed80372f65bb05fe62dd07979b239a17ac065d",
         "subdir": "skills/codex-ppt",
         "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+      },
+      "dependencies": []
+    },
+    {
+      "tree_sha256": "80d55c71b95641948b995df6374ea78baead1925a9169e05affe54c1a4cbda35",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/80d55c71b95641948b995df6374ea78baead1925a9169e05affe54c1a4cbda35.tar.gz",
+      "archive_sha256": "43dcdb10df5cc289d68cabcd4c0bbeb1e2a00e65cee2ee921ab0135c13d6beea",
+      "name": "delivery-quality-gate",
+      "runtime_path": "/Users/qingpei/.agents/skills/delivery-quality-gate",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/delivery-quality-gate",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/delivery-quality-gate"
       },
       "dependencies": []
     },
@@ -596,9 +624,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "fbeb3987a34502d2adc48ff7c9d82d7baf79dd8cfc5cd8ff304e319d7a6340e3",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/fbeb3987a34502d2adc48ff7c9d82d7baf79dd8cfc5cd8ff304e319d7a6340e3.tar.gz",
-      "archive_sha256": "36e3480db59c4fde4546e7a40c357b5baa9729f79e7c7f8f7b71b7d455fb872c",
+      "tree_sha256": "48cc3cb50c9c79f8f63ba365ec07d904ed053b05f3484e34ea12a229ae0c0880",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/48cc3cb50c9c79f8f63ba365ec07d904ed053b05f3484e34ea12a229ae0c0880.tar.gz",
+      "archive_sha256": "db74da49a756d79728b8f44c0916bf366a0a3a9be611d5b304f07f7b99ee641f",
       "name": "run-resumable-long-tasks",
       "runtime_path": "/Users/qingpei/.agents/skills/run-resumable-long-tasks",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/run-resumable-long-tasks",
@@ -790,9 +818,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "6d50fab8f8a00019ead0db4bcb581e62d45c63996e6dfe7064b572e0b2843748",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/6d50fab8f8a00019ead0db4bcb581e62d45c63996e6dfe7064b572e0b2843748.tar.gz",
-      "archive_sha256": "4fcc4dad98334d5e0026a9078bc1d7079579ddd6aa68c953fcdc0e4df22a35e5",
+      "tree_sha256": "6423d6b45c2227c173542c2b2af2894834771f34c85a7f33573fbf44736270c1",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/6423d6b45c2227c173542c2b2af2894834771f34c85a7f33573fbf44736270c1.tar.gz",
+      "archive_sha256": "159009e99991cba8415400590a3ba40416ced463bbb51745e1c71c8b69302e91",
       "name": "video-to-obsidian-note",
       "runtime_path": "/Users/qingpei/.agents/skills/video-to-obsidian-note",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/video-to-obsidian-note",
@@ -1051,21 +1079,6 @@
       "origin": {
         "kind": "unrecorded",
         "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
-      },
-      "dependencies": []
-    },
-    {
-      "tree_sha256": "80d55c71b95641948b995df6374ea78baead1925a9169e05affe54c1a4cbda35",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/80d55c71b95641948b995df6374ea78baead1925a9169e05affe54c1a4cbda35.tar.gz",
-      "archive_sha256": "43dcdb10df5cc289d68cabcd4c0bbeb1e2a00e65cee2ee921ab0135c13d6beea",
-      "name": "delivery-quality-gate",
-      "runtime_path": "/Users/qingpei/.agents/skills/delivery-quality-gate",
-      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/delivery-quality-gate",
-      "origin": {
-        "kind": "git",
-        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
-        "ref": "main",
-        "subdir": "skills/delivery-quality-gate"
       },
       "dependencies": []
     }
