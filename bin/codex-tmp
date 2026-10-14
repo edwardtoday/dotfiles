@@ -11,6 +11,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import plistlib
+import re
 import secrets
 import shutil
 import stat
@@ -18,6 +20,7 @@ import subprocess
 import sys
 import time
 from typing import Any, Callable, Iterable, Iterator
+from urllib.parse import unquote, urlsplit
 
 
 MANIFEST_NAME = ".codex-tmp-task.json"
@@ -25,6 +28,7 @@ SCHEMA_VERSION = 1
 UTC = dt.timezone.utc
 GIB = 1024**3
 PRESSURE_LEVELS = {"healthy": 0, "soft": 1, "hard": 2, "emergency": 3}
+_VOLUME_IDENTITIES: dict[int, str] = {}
 
 
 def utc_now() -> dt.datetime:
@@ -112,6 +116,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "recovery_gc_days": 7,
     "max_recovery_gc_per_run": 2,
     "max_output_cleanup_per_run": 2,
+    "reuse_git_root": "${CODEX_REUSE_GIT_ROOT:-$HOME/git-sansi}",
 }
 
 LIFECYCLE_MODES = {"shadow", "v2-new"}
@@ -445,6 +450,39 @@ def ownership_record_path(paths: Paths, task_instance_id: str) -> Path:
     return paths.state / "ownership" / f"{task_instance_id}.json"
 
 
+def stable_volume_identity(task: Path, device: int) -> str:
+    cached = _VOLUME_IDENTITIES.get(device)
+    if cached is not None:
+        return cached
+    try:
+        filesystem = subprocess.run(
+            ["/bin/df", "-P", str(task)],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+        lines = [line for line in filesystem.stdout.splitlines() if line.strip()]
+        if filesystem.returncode != 0 or len(lines) < 2:
+            raise LifecycleError(f"cannot resolve filesystem device for {task}")
+        device_node = lines[-1].split()[0]
+        result = subprocess.run(
+            ["/usr/sbin/diskutil", "info", "-plist", device_node],
+            capture_output=True,
+            check=False,
+            timeout=5,
+        )
+        payload = plistlib.loads(result.stdout) if result.returncode == 0 else {}
+    except (OSError, plistlib.InvalidFileException, subprocess.TimeoutExpired) as exc:
+        raise LifecycleError(f"cannot identify filesystem volume for {task}: {exc}") from exc
+    volume_uuid = payload.get("VolumeUUID") if isinstance(payload, dict) else None
+    if not isinstance(volume_uuid, str) or not volume_uuid.strip():
+        raise LifecycleError(f"filesystem has no stable volume UUID: {task}")
+    identity = f"volume-uuid:{volume_uuid.strip().lower()}"
+    _VOLUME_IDENTITIES[device] = identity
+    return identity
+
+
 def ownership_record(task: Path, manifest: dict[str, Any]) -> dict[str, Any]:
     task_stat = task.stat()
     task_instance_id = manifest.get("task_instance_id")
@@ -454,11 +492,12 @@ def ownership_record(task: Path, manifest: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(generation, int) or generation < 1:
         raise LifecycleError(f"task has invalid lifecycle generation: {task}")
     return {
-        "schema": 1,
+        "schema": 2,
         "name": str(manifest.get("name", task.name)),
         "task_instance_id": task_instance_id,
         "device": task_stat.st_dev,
         "inode": task_stat.st_ino,
+        "volume_identity": stable_volume_identity(task, task_stat.st_dev),
         "lifecycle_owner": lifecycle_owner(manifest),
         "generation": generation,
         "updated_at": iso(),
@@ -472,6 +511,47 @@ def write_ownership_record(paths: Paths, task: Path, manifest: dict[str, Any]) -
     atomic_json(ownership_record_path(paths, task_instance_id), ownership_record(task, manifest))
 
 
+def reconcile_ownership_record(
+    paths: Paths,
+    task: Path,
+    manifest: dict[str, Any],
+    record: object,
+) -> dict[str, Any]:
+    expected = ownership_record(task, manifest)
+    if not isinstance(record, dict):
+        raise LifecycleError(f"missing lifecycle ownership record: {task.name}")
+    stable_fields = (
+        "name",
+        "task_instance_id",
+        "inode",
+        "lifecycle_owner",
+        "generation",
+    )
+    if any(record.get(field) != expected.get(field) for field in stable_fields):
+        raise LifecycleError(f"stale or conflicting lifecycle ownership: {task.name}")
+    recorded_volume = record.get("volume_identity")
+    if recorded_volume is not None and recorded_volume != expected["volume_identity"]:
+        raise LifecycleError(f"stale or conflicting lifecycle ownership: {task.name}")
+    if (
+        record.get("schema") != expected["schema"]
+        or record.get("device") != expected["device"]
+        or recorded_volume != expected["volume_identity"]
+    ):
+        repaired = {
+            **record,
+            "schema": expected["schema"],
+            "device": expected["device"],
+            "volume_identity": expected["volume_identity"],
+            "updated_at": iso(),
+        }
+        atomic_json(
+            ownership_record_path(paths, str(expected["task_instance_id"])),
+            repaired,
+        )
+        return repaired
+    return record
+
+
 def require_writer(
     paths: Paths, task: Path, manifest: dict[str, Any], expected_owner: str
 ) -> dict[str, Any]:
@@ -480,19 +560,7 @@ def require_writer(
     with ownership_lock(paths):
         task_instance_id = str(manifest.get("task_instance_id", ""))
         record = load_json(ownership_record_path(paths, task_instance_id), None)
-        expected = ownership_record(task, manifest)
-        if not isinstance(record, dict):
-            raise LifecycleError(f"missing lifecycle ownership record: {task.name}")
-        identity_fields = (
-            "name",
-            "task_instance_id",
-            "device",
-            "inode",
-            "lifecycle_owner",
-            "generation",
-        )
-        if any(record.get(field) != expected.get(field) for field in identity_fields):
-            raise LifecycleError(f"stale or conflicting lifecycle ownership: {task.name}")
+        record = reconcile_ownership_record(paths, task, manifest, record)
         if record.get("lifecycle_owner") != expected_owner:
             raise LifecycleError(
                 f"{expected_owner} writer cannot mutate {record.get('lifecycle_owner')} task: {task.name}"
@@ -542,20 +610,8 @@ def backfill_ownership_records(paths: Paths) -> dict[str, list[dict[str, str]]]:
                         paths, str(manifest.get("task_instance_id", ""))
                     )
                     if record_path.exists():
-                        expected = ownership_record(task, manifest)
                         record = load_json(record_path, None)
-                        fields = (
-                            "name",
-                            "task_instance_id",
-                            "device",
-                            "inode",
-                            "lifecycle_owner",
-                            "generation",
-                        )
-                        if not isinstance(record, dict) or any(
-                            record.get(field) != expected.get(field) for field in fields
-                        ):
-                            raise LifecycleError("ownership record conflicts with task identity")
+                        reconcile_ownership_record(paths, task, manifest, record)
                     else:
                         write_ownership_record(paths, task, manifest)
                         created.append({"task": lock_name, "owner": lifecycle_owner(manifest)})
@@ -779,6 +835,81 @@ def iter_tasks(paths: Paths) -> Iterator[Path]:
         if entry.name.startswith(".") or entry.is_symlink() or not entry.is_dir():
             continue
         yield entry
+
+
+SANSI_GIT_HOST = "git.sansi.net"
+SCP_REMOTE_PATTERN = re.compile(r"^(?:[^@/]+@)?([^:]+):(.+)$")
+
+
+def git_remote_identity(remote: str) -> str | None:
+    """Return a credential-free host/path identity for a Git remote."""
+    value = remote.strip()
+    if not value:
+        return None
+    parsed = urlsplit(value if "://" in value else "")
+    if parsed.scheme:
+        host = parsed.hostname
+        path = parsed.path
+    else:
+        match = SCP_REMOTE_PATTERN.match(value)
+        if not match:
+            return None
+        host, path = match.groups()
+    if not host or not path:
+        return None
+    normalized = unquote(path).strip("/")
+    if normalized.endswith(".git"):
+        normalized = normalized[:-4]
+    parts = Path(normalized).parts
+    if not normalized or any(part in {"", ".", ".."} for part in parts):
+        return None
+    return f"{host.lower()}/{normalized}"
+
+
+def git_remote_identities(repository: Path) -> list[str]:
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository),
+                "config",
+                "--local",
+                "--get-regexp",
+                r"^remote\..*\.url$",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+            env=git_read_only_environment(),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    identities = {
+        identity
+        for line in result.stdout.splitlines()
+        for raw in [line.split(None, 1)[1] if len(line.split(None, 1)) == 2 else ""]
+        for identity in [git_remote_identity(raw)]
+        if identity
+    }
+    return sorted(identities)
+
+
+def git_repository_paths(root: Path) -> list[Path]:
+    if not root.is_dir() or root.is_symlink():
+        return []
+    repositories: list[Path] = []
+    for base, dirs, names in os.walk(root, topdown=True, followlinks=False):
+        current = Path(base)
+        if ".git" in dirs or ".git" in names:
+            repositories.append(current)
+            dirs[:] = []
+            continue
+        if "HEAD" in names and {"objects", "refs"}.issubset(dirs):
+            repositories.append(current)
+            dirs[:] = []
+    return sorted(repositories)
 
 
 def filesystem_created_at(task: Path) -> dt.datetime:
@@ -1184,6 +1315,29 @@ def load_sessions(paths: Paths) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def task_session_ids(
+    paths: Paths, task: Path, manifest: dict[str, Any] | None
+) -> list[str]:
+    owners = {
+        str(value)
+        for value in (manifest or {}).get("owner_session_ids", [])
+        if str(value)
+    }
+    task_root = task.resolve(strict=False)
+    for session_id, payload in load_sessions(paths).items():
+        if not isinstance(payload, dict):
+            continue
+        cwd = str(payload.get("cwd", "")).strip()
+        if not cwd:
+            continue
+        try:
+            Path(cwd).expanduser().resolve(strict=False).relative_to(task_root)
+        except ValueError:
+            continue
+        owners.add(str(session_id))
+    return sorted(owners)
+
+
 def preservation_blockers(
     paths: Paths, config: dict[str, Any], task: Path, manifest: dict[str, Any]
 ) -> list[str]:
@@ -1327,14 +1481,17 @@ def mark_task(
     if args.status == "complete":
         manifest["completed_at"] = iso()
         manifest["fingerprint"] = fingerprint(task)
-        manifest["required_paths"] = sorted(
-            {str(Path(value).expanduser().resolve()) for value in (args.depends_on or [])}
-        )
-        if args.note:
-            manifest["recovery_note"] = args.note
+        if args.depends_on:
+            manifest["required_paths"] = sorted(
+                {str(Path(value).expanduser().resolve()) for value in args.depends_on}
+            )
+        else:
+            manifest.setdefault("required_paths", [])
     else:
         manifest["completed_at"] = None
         manifest["fingerprint"] = None
+    if args.note:
+        manifest["recovery_note"] = args.note
     write_manifest(task, manifest)
     append_history(paths, {"action": "mark", "task": str(task), "status": args.status})
     return {"task": str(task), "status": args.status, "manifest": str(manifest_path(task))}
@@ -2361,14 +2518,20 @@ def remove_tree_same_device(
 ) -> None:
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     identities = expected_entries or tree_identity_snapshot(path)
+    # Unlinking one hard-link changes ctime on every remaining link to the
+    # same inode.  Remember those inode identities so the cleaner does not
+    # mistake its own link-count change for an external mutation; content,
+    # inode, type, size, and mtime are still checked at the final gate.
+    internally_unlinked_inodes: set[tuple[int, int]] = set()
 
     def require_identity(
         relative: str, value: os.stat_result, *, after_rename: bool = False
     ) -> None:
         expected = identities.get(relative)
+        internally_changed = (value.st_dev, value.st_ino) in internally_unlinked_inodes
         matches = expected is not None and (
             rename_stable_identity(value) == expected[0][:5]
-            if after_rename
+            if after_rename or internally_changed
             else stat_identity(value) == expected[0]
         )
         if not matches:
@@ -2426,7 +2589,9 @@ def remove_tree_same_device(
                 final_stat = os.stat(staged_name, dir_fd=directory_fd, follow_symlinks=False)
                 require_identity(relative, final_stat, after_rename=True)
                 require_content(relative, directory_fd, staged_name, final_stat)
+                inode_key = (final_stat.st_dev, final_stat.st_ino)
                 os.unlink(staged_name, dir_fd=directory_fd)
+                internally_unlinked_inodes.add(inode_key)
         with os.scandir(directory_fd) as remaining:
             if next(remaining, None) is not None:
                 raise LifecycleError(f"refusing to delete directory that received new content: {path}")
@@ -2847,6 +3012,27 @@ def is_symlink_only_node_modules(path: Path) -> bool:
     return saw_symlink
 
 
+def is_cargo_target_directory(path: Path) -> bool:
+    if path.name != "target":
+        return False
+    rustc_info = path / ".rustc_info.json"
+    if rustc_info.is_file() and not rustc_info.is_symlink():
+        return True
+    for profile in ("debug", "release"):
+        fingerprints = path / profile / ".fingerprint"
+        if fingerprints.is_dir() and not fingerprints.is_symlink():
+            return True
+    cache_tag = path / "CACHEDIR.TAG"
+    if cache_tag.is_file() and not cache_tag.is_symlink():
+        try:
+            return "cargo" in cache_tag.read_text(
+                encoding="utf-8", errors="replace"
+            ).lower()
+        except OSError:
+            return False
+    return False
+
+
 def reproducible_directories(task: Path) -> list[Path]:
     candidates: list[Path] = []
     for base, dirs, _names in os.walk(task, topdown=True, followlinks=False):
@@ -2857,7 +3043,9 @@ def reproducible_directories(task: Path) -> list[Path]:
                 continue
             if name.startswith(".codex-tmp-output-deleting-"):
                 continue
-            if name in {"target", "node_modules"}:
+            if name == "target" and is_cargo_target_directory(path):
+                candidates.append(path)
+            elif name == "node_modules":
                 candidates.append(path)
             else:
                 kept.append(name)
@@ -2879,6 +3067,267 @@ def reproducible_output_tombstones(task: Path) -> list[Path]:
                 kept.append(name)
         dirs[:] = kept
     return sorted(tombstones, key=lambda path: len(path.parts), reverse=True)
+
+
+def python_environment_directories(task: Path) -> list[Path]:
+    environments: list[Path] = []
+    for base, dirs, names in os.walk(task, topdown=True, followlinks=False):
+        current = Path(base)
+        if "pyvenv.cfg" in names and current not in environments:
+            environments.append(current)
+            dirs[:] = []
+            continue
+        dirs[:] = [
+            name
+            for name in dirs
+            if name not in {".git", "node_modules", "target"}
+            and not name.startswith(".codex-tmp-output-deleting-")
+        ]
+    return sorted(environments)
+
+
+def shared_environment_signals() -> dict[str, bool]:
+    return {
+        name: shutil.which(name) is not None
+        for name in ("node", "npm", "pnpm", "python3", "uv")
+    }
+
+
+def allocated_bytes_many(
+    items: list[Path], config: dict[str, Any]
+) -> dict[str, int | None]:
+    if not items:
+        return {}
+    timeout = float(config["capacity_measure_timeout_seconds"])
+    try:
+        result = subprocess.run(
+            ["/usr/bin/du", "-sk", *[str(item) for item in items]],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {str(item): None for item in items}
+    measured: dict[str, int | None] = {str(item): None for item in items}
+    for line in result.stdout.splitlines():
+        fields = line.split(None, 1)
+        if len(fields) != 2:
+            continue
+        try:
+            measured[fields[1]] = int(fields[0]) * 1024
+        except ValueError:
+            continue
+    return measured
+
+
+def inspect_task(
+    paths: Paths,
+    config: dict[str, Any],
+    task: Path,
+    t7_root: Path,
+    task_allocated_bytes: int | None,
+    *,
+    detailed_sizes: bool,
+) -> dict[str, Any]:
+    manifest = load_manifest(task)
+    status = str(manifest.get("status")) if manifest else "unmanaged"
+    repository_paths = git_repository_paths(task)
+    output_paths = reproducible_directories(task)
+    environment_paths = python_environment_directories(task)
+    detail_paths = repository_paths + output_paths + environment_paths if detailed_sizes else []
+    detail_sizes = allocated_bytes_many(detail_paths, config)
+    repositories: list[dict[str, Any]] = []
+    for repository in repository_paths:
+        identities = git_remote_identities(repository)
+        reuse: dict[str, Any] = {"status": "not-sansi", "paths": []}
+        sansi_identity = next(
+            (identity for identity in identities if identity.startswith(f"{SANSI_GIT_HOST}/")),
+            None,
+        )
+        if sansi_identity:
+            relative = Path(sansi_identity.split("/", 1)[1])
+            reuse = {
+                "status": "move-to-t7",
+                "paths": [str(t7_root / relative)],
+            }
+        repositories.append(
+            {
+                "path": str(repository),
+                "allocated_bytes": detail_sizes.get(str(repository)),
+                "remote_identities": identities,
+                "reuse": reuse,
+            }
+        )
+    outputs = []
+    for candidate in output_paths:
+        outputs.append(
+            {
+                "path": str(candidate),
+                "kind": "node_modules" if candidate.name == "node_modules" else "cargo-target",
+                "allocated_bytes": detail_sizes.get(str(candidate)),
+                "symlink_only": (
+                    is_symlink_only_node_modules(candidate)
+                    if candidate.name == "node_modules"
+                    else False
+                ),
+            }
+        )
+    environments = [
+        {
+            "path": str(environment),
+            "kind": "python-venv",
+            "allocated_bytes": detail_sizes.get(str(environment)),
+        }
+        for environment in environment_paths
+    ]
+    return {
+        "name": task.name,
+        "path": str(task),
+        "status": status,
+        "task_instance_id": (manifest or {}).get("task_instance_id"),
+        "allocated_bytes": task_allocated_bytes,
+        "owner_session_ids": task_session_ids(paths, task, manifest),
+        "repositories": repositories,
+        "reproducible_outputs": outputs,
+        "python_environments": environments,
+        "shared_environment_signals": shared_environment_signals(),
+    }
+
+
+def inspect_tasks(
+    paths: Paths, config: dict[str, Any], task: Path | None = None
+) -> dict[str, Any]:
+    t7_root = Path(str(config.get("reuse_git_root", ""))).expanduser()
+    selected = [task] if task is not None else list(iter_tasks(paths))
+    task_sizes = allocated_bytes_many(selected, config)
+    return {
+        "schema": 1,
+        "root": str(paths.root),
+        "t7_root": str(t7_root),
+        "tasks": [
+            inspect_task(
+                paths,
+                config,
+                item,
+                t7_root,
+                task_sizes.get(str(item)),
+                detailed_sizes=task is not None,
+            )
+            for item in selected
+        ],
+    }
+
+
+def recommendation_id(recommendation: dict[str, Any]) -> str:
+    payload = {
+        key: recommendation.get(key)
+        for key in ("action", "task", "task_instance_id", "path", "target", "kind")
+    }
+    return hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:20]
+
+
+def build_recommendations(inspected: dict[str, Any]) -> list[dict[str, Any]]:
+    recommendations: list[dict[str, Any]] = []
+    for task in inspected["tasks"]:
+        task_path = str(task["path"])
+        sessions = [str(value) for value in task.get("owner_session_ids", []) if str(value)]
+        outputs = [item for item in task.get("reproducible_outputs", []) if not item.get("symlink_only")]
+        if task["status"] in {"complete", "keep"} and outputs:
+            total = sum(int(item.get("allocated_bytes") or 0) for item in outputs)
+            item = {
+                "action": "clean-reproducible",
+                "kind": "reproducible-output",
+                "task": task_path,
+                "task_instance_id": task.get("task_instance_id"),
+                "path": task_path,
+                "target": None,
+                "session_ids": sessions,
+                "executable": True,
+                "requires_recheck": True,
+                "estimated_reclaim_bytes": total,
+                "message": {
+                    "recipients": sessions,
+                    "subject": "可再生临时输出清理建议",
+                    "body": f"{task_path} 有约 {total} bytes 的可再生输出，验收证据不依赖这些目录；清理前会重新检查进程、Git 和内容身份。",
+                },
+            }
+            item["id"] = recommendation_id(item)
+            recommendations.append(item)
+        if task["shared_environment_signals"].get("node") and any(
+            output["kind"] == "node_modules" for output in outputs
+        ):
+            node_outputs = [output for output in outputs if output["kind"] == "node_modules"]
+            total = sum(int(output.get("allocated_bytes") or 0) for output in node_outputs)
+            item = {
+                "action": "reuse-node-environment",
+                "kind": "environment-reuse",
+                "task": task_path,
+                "task_instance_id": task.get("task_instance_id"),
+                "path": task_path,
+                "target": None,
+                "session_ids": sessions,
+                "executable": False,
+                "requires_recheck": True,
+                "estimated_reclaim_bytes": total,
+                "message": {
+                    "recipients": sessions,
+                    "subject": "Node 环境复用建议",
+                    "body": f"{task_path} 包含项目本地 node_modules；请先核对锁文件、Node 版本和原项目兼容性，再复用或扩展共享 Node 环境。",
+                },
+            }
+            item["id"] = recommendation_id(item)
+            recommendations.append(item)
+        for repository in task["repositories"]:
+            reuse = repository["reuse"]
+            if reuse["status"] != "move-to-t7":
+                continue
+            target = reuse["paths"][0] if reuse["paths"] else None
+            item = {
+                "action": "move-git-to-t7",
+                "kind": "git-reuse",
+                "task": task_path,
+                "task_instance_id": task.get("task_instance_id"),
+                "path": repository["path"],
+                "target": target,
+                "session_ids": sessions,
+                "executable": False,
+                "requires_recheck": True,
+                "estimated_reclaim_bytes": int(repository.get("allocated_bytes") or 0),
+                "message": {
+                    "recipients": sessions,
+                    "subject": "Git 工作区迁移建议",
+                    "body": f"{repository['path']} 来源于 git.sansi.net，应迁往 T7 canonical 路径 {target}；请先验证 HEAD、tree、dirty 状态和本地独有提交，再迁移并删除临时副本。",
+                },
+            }
+            item["id"] = recommendation_id(item)
+            recommendations.append(item)
+        for environment in task["python_environments"]:
+            signals = task["shared_environment_signals"]
+            if not (signals.get("python3") or signals.get("uv")):
+                continue
+            item = {
+                "action": "reuse-python-environment",
+                "kind": "environment-reuse",
+                "task": task_path,
+                "task_instance_id": task.get("task_instance_id"),
+                "path": environment["path"],
+                "target": None,
+                "session_ids": sessions,
+                "executable": False,
+                "requires_recheck": True,
+                "estimated_reclaim_bytes": int(environment.get("allocated_bytes") or 0),
+                "message": {
+                    "recipients": sessions,
+                    "subject": "Python 环境复用建议",
+                    "body": f"{environment['path']} 是项目本地 Python 环境；请先验证依赖锁定和原项目可用性，再迁移到兼容的共享环境。",
+                },
+            }
+            item["id"] = recommendation_id(item)
+            recommendations.append(item)
+    return recommendations
 
 
 def remove_reproducible_tombstone(task: Path, tombstone: Path) -> dict[str, Any]:
@@ -2905,13 +3354,15 @@ def clean_reproducible_outputs(
     manifest: dict[str, Any],
     *,
     allow_active_v2: bool = False,
+    allow_keep: bool = False,
 ) -> dict[str, Any]:
     active_v2 = (
         allow_active_v2
         and manifest.get("status") == "active"
         and lifecycle_owner(manifest) == "v2"
     )
-    if manifest.get("status") != "complete" and not active_v2:
+    explicitly_selected_keep = allow_keep and manifest.get("status") == "keep"
+    if manifest.get("status") != "complete" and not active_v2 and not explicitly_selected_keep:
         raise LifecycleError("automatic reproducible cleanup requires a completed task")
     cleaned: list[dict[str, Any]] = []
     blocked: list[dict[str, str]] = []
@@ -3983,6 +4434,91 @@ def command_inventory(
     }
 
 
+def command_inspect(
+    args: argparse.Namespace, paths: Paths, config: dict[str, Any]
+) -> dict[str, Any]:
+    task = resolve_task(paths, args.task) if args.task else None
+    return inspect_tasks(paths, config, task)
+
+
+def command_recommend(
+    args: argparse.Namespace, paths: Paths, config: dict[str, Any]
+) -> dict[str, Any]:
+    inspected = command_inspect(args, paths, config)
+    result = {
+        "schema": 1,
+        "generated_at": iso(),
+        "delivery": "model",
+        "recommendations": build_recommendations(inspected),
+    }
+    atomic_json(paths.state / "recommendations.json", result)
+    return result
+
+
+def command_clean(args: argparse.Namespace, paths: Paths) -> dict[str, Any]:
+    snapshot_path = paths.state / "recommendations.json"
+    snapshot = load_json(snapshot_path, None)
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("recommendations"), list):
+        raise LifecycleError("no recommendation snapshot; run codex-tmp recommend first")
+    matches = [
+        item
+        for item in snapshot["recommendations"]
+        if isinstance(item, dict) and item.get("id") == args.recommendation_id
+    ]
+    if len(matches) != 1:
+        raise LifecycleError(f"expected one recommendation match, found {len(matches)}")
+    recommendation = matches[0]
+    if recommendation.get("executed_at"):
+        raise LifecycleError("recommendation was already executed")
+    if not recommendation.get("executable"):
+        raise LifecycleError("recommendation requires model or session action")
+    if recommendation.get("action") != "clean-reproducible":
+        raise LifecycleError(f"unsupported executable recommendation: {recommendation.get('action')}")
+    task = resolve_task(paths, str(recommendation.get("task", "")))
+    with task_lock(paths, task.name) as acquired:
+        if not acquired:
+            raise LifecycleError(f"cannot acquire task lock: {task.name}")
+        manifest = load_manifest(task)
+        if not manifest:
+            raise LifecycleError("recommended task is unmanaged")
+        if manifest.get("task_instance_id") != recommendation.get("task_instance_id"):
+            raise LifecycleError("recommendation belongs to a different task instance")
+        if manifest.get("status") not in {"complete", "keep"}:
+            raise LifecycleError("recommended cleanup requires a completed or kept task")
+        require_writer(paths, task, manifest, lifecycle_owner(manifest))
+        result = clean_reproducible_outputs(paths, task, manifest, allow_keep=True)
+    reclaimed = sum(
+        int(item.get("reclaimed_allocated_bytes", 0)) for item in result["cleaned"]
+    )
+    attempt = {
+        "reclaimed_allocated_bytes": reclaimed,
+        "blocked": result["blocked"],
+    }
+    if result["blocked"]:
+        recommendation["last_attempt_at"] = iso()
+        recommendation["last_result"] = attempt
+    else:
+        recommendation["executed_at"] = iso()
+        recommendation["result"] = attempt
+    atomic_json(snapshot_path, snapshot)
+    append_history(
+        paths,
+        {
+            "action": "recommendation-clean",
+            "recommendation_id": args.recommendation_id,
+            "task": str(task),
+            "bytes": reclaimed,
+        },
+    )
+    return {
+        "recommendation_id": args.recommendation_id,
+        "task": str(task),
+        "reclaimed_allocated_bytes": reclaimed,
+        "cleaned": result["cleaned"],
+        "blocked": result["blocked"],
+    }
+
+
 def command_restore(args: argparse.Namespace, paths: Paths) -> dict[str, Any]:
     matches = [
         entry
@@ -4024,6 +4560,15 @@ def read_hook_event() -> dict[str, Any]:
     if not isinstance(event, dict):
         raise LifecycleError("hook JSON must be an object")
     return event
+
+
+def hook_protocol_response(event: dict[str, Any]) -> dict[str, bool] | None:
+    event_name = str(event.get("hook_event_name", "")).strip()
+    if event_name in {"SessionStart", "Stop"}:
+        return {"continue": True}
+    if event_name == "SessionEnd":
+        return None
+    raise LifecycleError(f"unsupported hook event: {event_name or '<missing>'}")
 
 
 def apply_hook_event(paths: Paths, config: dict[str, Any], event: dict[str, Any]) -> None:
@@ -4230,7 +4775,7 @@ def command_maintenance(paths: Paths, config: dict[str, Any]) -> dict[str, Any]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Protect, quarantine, restore, and eventually purge persistent Codex task workspaces."
+        description="Inspect persistent Codex temporary workspaces, recommend reuse, and execute verified cleanup."
     )
     sub = parser.add_subparsers(dest="command", required=True)
     create = sub.add_parser("create", help="create a managed active task directory")
@@ -4278,6 +4823,18 @@ def build_parser() -> argparse.ArgumentParser:
     sweep.add_argument("--quiet", action="store_true")
     inventory = sub.add_parser("inventory", help="list managed and unmanaged task directories")
     inventory.add_argument("--refresh", action="store_true")
+    inspect = sub.add_parser(
+        "inspect", help="inspect temporary tasks for reclaimable and reusable content"
+    )
+    inspect.add_argument("task", nargs="?")
+    recommend = sub.add_parser(
+        "recommend", help="record session-addressed cleanup and reuse recommendations"
+    )
+    recommend.add_argument("task", nargs="?")
+    clean = sub.add_parser(
+        "clean", help="execute one verified executable recommendation"
+    )
+    clean.add_argument("recommendation_id")
     status = sub.add_parser(
         "status", help="show the simplified in-use, settling, recoverable, or blocked state"
     )
@@ -4327,11 +4884,13 @@ def main() -> int:
         create_startup_warnings: list[str] = []
         if args.command == "hook":
             event = read_hook_event()
-            event_id = queue_hook_event(paths, event)
-            result = {"queued": True, "event_id": event_id}
+            result = hook_protocol_response(event)
+            queue_hook_event(paths, event)
         else:
-            dry_run = args.command == "sweep" and args.dry_run
-            if not dry_run and args.command != "maintenance":
+            skip_lifecycle_reconcile = args.command in {"inspect", "recommend"} or (
+                args.command == "sweep" and args.dry_run
+            )
+            if not skip_lifecycle_reconcile and args.command != "maintenance":
                 with lifecycle_lock(paths) as acquired:
                     if not acquired:
                         raise LifecycleError("cannot acquire lifecycle state lock")
@@ -4366,6 +4925,12 @@ def main() -> int:
                 result = command_sweep(args, paths, config)
             elif args.command == "inventory":
                 result = command_inventory(paths, config, refresh_capacity=args.refresh)
+            elif args.command == "inspect":
+                result = command_inspect(args, paths, config)
+            elif args.command == "recommend":
+                result = command_recommend(args, paths, config)
+            elif args.command == "clean":
+                result = command_clean(args, paths)
             elif args.command == "status":
                 result = command_status(args, paths)
             elif args.command == "hold":

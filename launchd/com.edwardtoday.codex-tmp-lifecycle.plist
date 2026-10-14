@@ -6,7 +6,7 @@
   <string>com.edwardtoday.codex-tmp-lifecycle</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/qingpei/.bin/codex-tmp-launchd</string>
+    <string>__HOME__/.bin/codex-tmp-launchd</string>
   </array>
   <key>RunAtLoad</key>
   <true/>

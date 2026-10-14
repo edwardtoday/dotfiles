@@ -41,10 +41,12 @@ class CodexTmpTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         base = Path(self.temporary.name)
+        self.base = base
         self.root = base / "tmp"
         self.state = base / "state"
         self.quarantine = base / "quarantine"
         self.recovery = base / "recovery"
+        self.reuse_git_root = base / "git-sansi"
         self.config = base / "config.json"
         self.config_data = {
             "complete_grace_hours": 0,
@@ -59,6 +61,7 @@ class CodexTmpTest(unittest.TestCase):
             "auto_adopt_after": "2999-01-01T00:00:00+00:00",
             "auto_adopt_min_age_seconds": 0,
             "orphan_active_hours": 24,
+            "reuse_git_root": str(self.reuse_git_root),
         }
         self.write_config()
         self.env = {
@@ -88,6 +91,13 @@ class CodexTmpTest(unittest.TestCase):
             check=check,
         )
 
+    def make_cargo_target(self, path: Path) -> None:
+        path.mkdir(parents=True)
+        (path / "CACHEDIR.TAG").write_text(
+            "Signature: 8a477f597d28d172789f06886806bc55\n# created by Cargo\n",
+            encoding="utf-8",
+        )
+
     def test_complete_quarantine_and_restore_round_trip(self) -> None:
         self.run_cli("create", "example", "--session-id", "old-session")
         task = self.root / "example"
@@ -102,6 +112,31 @@ class CodexTmpTest(unittest.TestCase):
         restored = json.loads(self.run_cli("restore", "example").stdout)
         self.assertEqual(restored["status"], "active")
         self.assertEqual((task / "evidence.txt").read_text(encoding="utf-8"), "recover me")
+
+    def test_keep_persists_recovery_note(self) -> None:
+        self.run_cli("create", "kept")
+        self.run_cli("keep", "kept", "--note", "migration evidence retained")
+
+        manifest = json.loads(
+            (self.root / "kept" / ".codex-tmp-task.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(manifest["status"], "keep")
+        self.assertEqual(manifest["recovery_note"], "migration evidence retained")
+
+    def test_recomplete_preserves_existing_recovery_dependencies(self) -> None:
+        self.run_cli("create", "recomplete")
+        task = self.root / "recomplete"
+        anchor = self.base / "evidence.tar.gz"
+        anchor.write_text("evidence", encoding="utf-8")
+        self.run_cli("complete", "recomplete", "--depends-on", str(anchor))
+
+        self.run_cli("complete", "recomplete", "--note", "refreshed fingerprint")
+
+        manifest = json.loads(
+            (task / ".codex-tmp-task.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(manifest["required_paths"], [str(anchor.resolve())])
+        self.assertEqual(manifest["recovery_note"], "refreshed fingerprint")
 
     def test_create_does_not_attach_ambient_session_outside_task_cwd(self) -> None:
         self.run_cli("create", "owned")
@@ -253,6 +288,204 @@ class CodexTmpTest(unittest.TestCase):
         self.assertEqual(inventory["reservations"]["reserved_bytes"], 2 * 1024**3)
         self.assertIn(inventory["capacity"]["pressure"], {"healthy", "soft", "hard", "emergency"})
 
+    def test_inspect_redacts_remote_credentials_and_derives_t7_canonical_path(self) -> None:
+        module = load_script_module()
+        self.assertIsNone(
+            module.git_remote_identity("git@git.sansi.net:../../outside.git")
+        )
+        self.write_config(reuse_git_root=str(self.reuse_git_root))
+        task = self.root / "reuse-repository"
+        repository = task / "repo"
+        canonical = self.reuse_git_root / "group" / "project"
+        repository.mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", str(repository)], check=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository),
+                "remote",
+                "add",
+                "origin",
+                "https://user:secret@git.sansi.net/group/project.git",
+            ],
+            check=True,
+        )
+
+        self.assertFalse(canonical.exists())
+
+        inspected = json.loads(self.run_cli("inspect", "reuse-repository").stdout)
+
+        encoded = json.dumps(inspected, ensure_ascii=False)
+        self.assertNotIn("secret", encoded)
+        repository_result = inspected["tasks"][0]["repositories"][0]
+        self.assertEqual(repository_result["remote_identities"], ["git.sansi.net/group/project"])
+        self.assertEqual(repository_result["reuse"]["status"], "move-to-t7")
+        self.assertEqual(repository_result["reuse"]["paths"], [str(canonical)])
+
+    def test_inspect_never_scans_t7_repository_root(self) -> None:
+        module = load_script_module()
+        task = self.root / "tmp-only-scan"
+        task.mkdir(parents=True)
+
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            paths = module.Paths()
+            paths.prepare()
+            config = module.load_config(paths)
+            original = module.git_repository_paths
+
+            def reject_t7_scan(root: Path) -> list[Path]:
+                if root == self.reuse_git_root:
+                    raise AssertionError("inspect must not scan T7")
+                return original(root)
+
+            with mock.patch.object(module, "git_repository_paths", side_effect=reject_t7_scan):
+                inspected = module.inspect_tasks(paths, config, task)
+
+        self.assertEqual(inspected["tasks"][0]["name"], "tmp-only-scan")
+        self.assertNotIn("t7_available", inspected)
+
+    def test_recommend_records_session_messages_and_clean_executes_safe_output(self) -> None:
+        self.run_cli("create", "recommend-clean", "--session-id", "owner-session")
+        task = self.root / "recommend-clean"
+        target = task / "repo" / "target"
+        self.make_cargo_target(target)
+        (target / "artifact").write_bytes(b"x" * 4096)
+        self.run_cli("complete", "recommend-clean", "--note", "fixture")
+
+        recommended = json.loads(self.run_cli("recommend", "recommend-clean").stdout)
+
+        clean = next(item for item in recommended["recommendations"] if item["action"] == "clean-reproducible")
+        self.assertTrue(clean["executable"])
+        self.assertEqual(clean["session_ids"], ["owner-session"])
+        self.assertIn("owner-session", clean["message"]["recipients"])
+        persisted = json.loads((self.state / "recommendations.json").read_text(encoding="utf-8"))
+        self.assertEqual(persisted["recommendations"][0]["id"], clean["id"])
+
+        cleaned = json.loads(self.run_cli("clean", clean["id"]).stdout)
+
+        self.assertFalse(target.exists())
+        self.assertEqual(cleaned["recommendation_id"], clean["id"])
+        self.assertGreater(cleaned["reclaimed_allocated_bytes"], 0)
+
+    def test_clean_rejects_non_executable_reuse_recommendation(self) -> None:
+        self.write_config(reuse_git_root=str(self.reuse_git_root))
+        self.run_cli("create", "reuse-only", "--session-id", "owner-session")
+        task = self.root / "reuse-only"
+        repository = task / "repo"
+        repository.mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", str(repository)], check=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository),
+                "remote",
+                "add",
+                "origin",
+                "https://git.sansi.net/group/reuse-only.git",
+            ],
+            check=True,
+        )
+
+        recommended = json.loads(self.run_cli("recommend", "reuse-only").stdout)
+        reuse = next(item for item in recommended["recommendations"] if item["action"] == "move-git-to-t7")
+
+        rejected = self.run_cli("clean", reuse["id"], check=False)
+
+        self.assertEqual(rejected.returncode, 1)
+        self.assertIn("requires model or session action", rejected.stderr)
+
+    def test_selected_recommendation_cleans_reproducible_output_from_kept_task(self) -> None:
+        self.run_cli("create", "kept-output", "--session-id", "owner-session")
+        task = self.root / "kept-output"
+        target = task / "repo" / "target"
+        self.make_cargo_target(target)
+        (target / "artifact").write_bytes(b"x" * 4096)
+        self.run_cli("keep", "kept-output", "--note", "preserve task evidence")
+
+        recommended = json.loads(self.run_cli("recommend", "kept-output").stdout)
+        clean = next(item for item in recommended["recommendations"] if item["executable"])
+        cleaned = json.loads(self.run_cli("clean", clean["id"]).stdout)
+
+        self.assertFalse(target.exists())
+        self.assertEqual(cleaned["recommendation_id"], clean["id"])
+        manifest = json.loads((task / ".codex-tmp-task.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["status"], "keep")
+
+    def test_recommend_identifies_shared_node_and_python_environment_candidates(self) -> None:
+        tools = self.base / "shared-tools"
+        tools.mkdir()
+        python = shutil.which("python3")
+        assert python is not None
+        (tools / "python3").symlink_to(python)
+        executable = tools / "node"
+        executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        executable.chmod(0o755)
+        self.env["PATH"] = f"{tools}:{self.env.get('PATH', '')}"
+        task = self.root / "environment-reuse"
+        node_modules = task / "node_modules"
+        node_modules.mkdir(parents=True)
+        (node_modules / "package.js").write_text("module.exports = {}\n", encoding="utf-8")
+        venv = task / ".venv"
+        venv.mkdir()
+        (venv / "pyvenv.cfg").write_text("home = /shared/python\n", encoding="utf-8")
+
+        recommended = json.loads(self.run_cli("recommend", "environment-reuse").stdout)
+        actions = {item["action"] for item in recommended["recommendations"]}
+
+        self.assertIn("reuse-node-environment", actions)
+        self.assertIn("reuse-python-environment", actions)
+        self.assertTrue(
+            all(not item["executable"] for item in recommended["recommendations"])
+        )
+
+    def test_clean_rejects_recreated_task_instance(self) -> None:
+        self.run_cli("create", "recreated")
+        task = self.root / "recreated"
+        target = task / "target"
+        self.make_cargo_target(target)
+        (target / "artifact").write_bytes(b"old")
+        self.run_cli("complete", "recreated")
+        recommended = json.loads(self.run_cli("recommend", "recreated").stdout)
+        clean = next(item for item in recommended["recommendations"] if item["executable"])
+        shutil.rmtree(task)
+        ownership = self.state / "ownership"
+        for record in ownership.glob("*.json"):
+            record.unlink()
+        self.run_cli("create", "recreated")
+        replacement_target = task / "target"
+        self.make_cargo_target(replacement_target)
+        (replacement_target / "artifact").write_bytes(b"new")
+        self.run_cli("complete", "recreated")
+
+        rejected = self.run_cli("clean", clean["id"], check=False)
+
+        self.assertEqual(rejected.returncode, 1)
+        self.assertIn("different task instance", rejected.stderr)
+        self.assertTrue(replacement_target.exists())
+
+    def test_inspect_infers_session_owner_from_recorded_cwd(self) -> None:
+        task = self.root / "cwd-owned"
+        nested = task / "repo"
+        nested.mkdir(parents=True)
+        self.state.mkdir(parents=True)
+        (self.state / "sessions.json").write_text(
+            json.dumps(
+                {
+                    "cwd-session": {
+                        "cwd": str(nested),
+                        "last_seen": "2026-08-04T00:00:00+00:00",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        inspected = json.loads(self.run_cli("inspect", "cwd-owned").stdout)
+
+        self.assertEqual(inspected["tasks"][0]["owner_session_ids"], ["cwd-session"])
+
     def test_capacity_measurement_timeout_uses_stale_cache_without_blocking(self) -> None:
         self.state.mkdir(parents=True)
         cached = {
@@ -374,7 +607,7 @@ class CodexTmpTest(unittest.TestCase):
         self.write_config(complete_grace_hours=999)
         self.run_cli("create", "outputs")
         task = self.root / "outputs"
-        (task / "repo" / "target").mkdir(parents=True)
+        self.make_cargo_target(task / "repo" / "target")
         (task / "repo" / "target" / "binary").write_bytes(b"x" * 4096)
         (task / "web" / "node_modules").mkdir(parents=True)
         (task / "web" / "node_modules" / "package.js").write_text("x", encoding="utf-8")
@@ -394,6 +627,20 @@ class CodexTmpTest(unittest.TestCase):
         self.assertFalse((task / "web" / "node_modules").exists())
         self.assertEqual(len(maintenance["output_cleanup"]), 1)
         self.assertNotIn("task content changed after it was marked complete", check["blockers"])
+
+    def test_maintenance_preserves_source_directory_named_target(self) -> None:
+        self.write_config(complete_grace_hours=999)
+        self.run_cli("create", "source-target")
+        task = self.root / "source-target"
+        source = task / "kernel" / "drivers" / "target"
+        source.mkdir(parents=True)
+        (source / "target_core_configfs.c").write_text("source", encoding="utf-8")
+        self.run_cli("complete", "source-target")
+
+        maintenance = json.loads(self.run_cli("maintenance").stdout)
+
+        self.assertTrue((source / "target_core_configfs.c").exists())
+        self.assertEqual(maintenance["output_cleanup"], [])
 
     def test_v2_new_task_claims_owner_generation_and_lease(self) -> None:
         self.write_config(lifecycle_mode="v2-new", active_lease_hours=1)
@@ -516,12 +763,73 @@ class CodexTmpTest(unittest.TestCase):
         self.assertTrue(record.exists())
         self.assertEqual(maintenance["v2_reconcile"]["mode"], "shadow")
 
+    def test_check_repairs_device_renumbering_for_same_task_identity(self) -> None:
+        self.run_cli("create", "device-renumbered")
+        task = self.root / "device-renumbered"
+        self.run_cli("complete", "device-renumbered")
+        manifest = json.loads(
+            (task / ".codex-tmp-task.json").read_text(encoding="utf-8")
+        )
+        record_path = self.state / "ownership" / f"{manifest['task_instance_id']}.json"
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record["device"] = int(record["device"]) + 1
+        record_path.write_text(json.dumps(record), encoding="utf-8")
+
+        checked = json.loads(self.run_cli("check", "device-renumbered").stdout)
+        repaired = json.loads(record_path.read_text(encoding="utf-8"))
+
+        self.assertTrue(checked["eligible"])
+        self.assertEqual(repaired["device"], task.stat().st_dev)
+        self.assertEqual(repaired["inode"], task.stat().st_ino)
+        self.assertEqual(repaired["schema"], 2)
+        self.assertTrue(repaired["volume_identity"].startswith("volume-uuid:"))
+
+    def test_device_renumbering_does_not_hide_inode_replacement(self) -> None:
+        self.run_cli("create", "device-and-inode-changed")
+        task = self.root / "device-and-inode-changed"
+        self.run_cli("complete", "device-and-inode-changed")
+        manifest = json.loads(
+            (task / ".codex-tmp-task.json").read_text(encoding="utf-8")
+        )
+        record_path = self.state / "ownership" / f"{manifest['task_instance_id']}.json"
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record["device"] = int(record["device"]) + 1
+        record["inode"] = int(record["inode"]) + 1
+        record_path.write_text(json.dumps(record), encoding="utf-8")
+
+        swept = json.loads(self.run_cli("sweep", "--dry-run").stdout)
+
+        self.assertEqual(len(swept["checked"]), 1)
+        self.assertFalse(swept["checked"][0]["eligible"])
+        self.assertIn("ownership", swept["checked"][0]["blockers"][0])
+        unchanged = json.loads(record_path.read_text(encoding="utf-8"))
+        self.assertNotEqual(unchanged["inode"], task.stat().st_ino)
+
+    def test_device_renumbering_does_not_cross_stable_volume_identity(self) -> None:
+        self.run_cli("create", "device-and-volume-changed")
+        task = self.root / "device-and-volume-changed"
+        self.run_cli("complete", "device-and-volume-changed")
+        manifest = json.loads(
+            (task / ".codex-tmp-task.json").read_text(encoding="utf-8")
+        )
+        record_path = self.state / "ownership" / f"{manifest['task_instance_id']}.json"
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record["device"] = int(record["device"]) + 1
+        record["volume_identity"] = "volume-uuid:different-volume"
+        record_path.write_text(json.dumps(record), encoding="utf-8")
+
+        swept = json.loads(self.run_cli("sweep", "--dry-run").stdout)
+
+        self.assertEqual(len(swept["checked"]), 1)
+        self.assertFalse(swept["checked"][0]["eligible"])
+        self.assertIn("ownership", swept["checked"][0]["blockers"][0])
+
     def test_v2_reconcile_cleans_expired_task_outputs_without_completion(self) -> None:
         self.write_config(lifecycle_mode="v2-new", active_lease_hours=1)
         self.run_cli("create", "v2-expired")
         task = self.root / "v2-expired"
         target = task / "repo" / "target"
-        target.mkdir(parents=True)
+        self.make_cargo_target(target)
         (target / "binary").write_bytes(b"x" * 4096)
         manifest_path = task / ".codex-tmp-task.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -541,7 +849,7 @@ class CodexTmpTest(unittest.TestCase):
         self.write_config(lifecycle_mode="v2-new", active_lease_hours=1)
         self.run_cli("create", "v2-fresh")
         target = self.root / "v2-fresh" / "repo" / "target"
-        target.mkdir(parents=True)
+        self.make_cargo_target(target)
         (target / "binary").write_bytes(b"x" * 4096)
 
         maintenance = json.loads(self.run_cli("maintenance").stdout)
@@ -558,7 +866,7 @@ class CodexTmpTest(unittest.TestCase):
         self.run_cli("create", "v2-session-end", "--session-id", "ending-session")
         task = self.root / "v2-session-end"
         target = task / "target"
-        target.mkdir()
+        self.make_cargo_target(target)
         (target / "binary").write_bytes(b"x" * 4096)
 
         self.run_cli(
@@ -579,7 +887,7 @@ class CodexTmpTest(unittest.TestCase):
         self.run_cli("create", "v2-stop", "--session-id", "active-session")
         task = self.root / "v2-stop"
         target = task / "target"
-        target.mkdir()
+        self.make_cargo_target(target)
         (target / "binary").write_bytes(b"x" * 4096)
 
         self.run_cli(
@@ -602,7 +910,7 @@ class CodexTmpTest(unittest.TestCase):
         self.run_cli("create", "v2-shared", "--session-id", "session-a")
         task = self.root / "v2-shared"
         target = task / "target"
-        target.mkdir()
+        self.make_cargo_target(target)
         (target / "binary").write_bytes(b"x" * 4096)
 
         for session_id, event_name in (
@@ -638,7 +946,7 @@ class CodexTmpTest(unittest.TestCase):
         self.run_cli("create", "v2-process-cwd")
         task = self.root / "v2-process-cwd"
         target = task / "target"
-        target.mkdir()
+        self.make_cargo_target(target)
         (target / "binary").write_bytes(b"x" * 4096)
         manifest_path = task / ".codex-tmp-task.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -681,7 +989,7 @@ class CodexTmpTest(unittest.TestCase):
         )
         tracked.write_text("dirty\n", encoding="utf-8")
         target = task / "target"
-        target.mkdir()
+        self.make_cargo_target(target)
         (target / "binary").write_bytes(b"x" * 4096)
         manifest_path = task / ".codex-tmp-task.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -720,7 +1028,7 @@ class CodexTmpTest(unittest.TestCase):
             check=True,
         )
         target = task / "target"
-        target.mkdir()
+        self.make_cargo_target(target)
         (target / "binary").write_bytes(b"x" * 4096)
         manifest_path = task / ".codex-tmp-task.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -812,7 +1120,7 @@ class CodexTmpTest(unittest.TestCase):
         self.run_cli("create", "held-output")
         task = self.root / "held-output"
         target = task / "target"
-        target.mkdir()
+        self.make_cargo_target(target)
         (target / "binary").write_bytes(b"x" * 4096)
         valid_until = (
             dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=2)
@@ -855,6 +1163,7 @@ class CodexTmpTest(unittest.TestCase):
         self.write_config(lifecycle_mode="v2-new")
         self.run_cli("create", "blocked-output")
         task = self.root / "blocked-output"
+        self.make_cargo_target(task / "target")
         repository = task / "target" / "nested"
         subprocess.run(["git", "init", "-q", str(repository)], check=True)
         (repository / "untracked.txt").write_text("dirty", encoding="utf-8")
@@ -904,7 +1213,7 @@ class CodexTmpTest(unittest.TestCase):
         self.run_cli("create", "stale-owner")
         task = self.root / "stale-owner"
         target = task / "target"
-        target.mkdir()
+        self.make_cargo_target(target)
         (target / "binary").write_bytes(b"x" * 4096)
         manifest_path = task / ".codex-tmp-task.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -930,7 +1239,7 @@ class CodexTmpTest(unittest.TestCase):
         self.run_cli("create", "legacy-owned")
         task = self.root / "legacy-owned"
         target = task / "target"
-        target.mkdir()
+        self.make_cargo_target(target)
         (target / "binary").write_bytes(b"x" * 4096)
         before = (task / ".codex-tmp-task.json").read_bytes()
         self.write_config(lifecycle_mode="v2-new")
@@ -1065,7 +1374,7 @@ class CodexTmpTest(unittest.TestCase):
         self.run_cli("create", "output-retry")
         task = self.root / "output-retry"
         target = task / "repo" / "target"
-        target.mkdir(parents=True)
+        self.make_cargo_target(target)
         (target / "binary").write_bytes(b"x" * 4096)
         self.run_cli("complete", "output-retry")
         module = load_script_module()
@@ -2418,6 +2727,19 @@ class CodexTmpTest(unittest.TestCase):
         remaining = [path.read_text(encoding="utf-8") for path in root.iterdir() if path.is_file()]
         self.assertIn("new unique content", remaining)
 
+    def test_same_device_removal_handles_internal_hardlinks(self) -> None:
+        root = self.root.parent / "hardlink-tree"
+        root.mkdir()
+        first = root / "first.o"
+        second = root / "second.o"
+        first.write_bytes(b"reproducible artifact" * 256)
+        os.link(first, second)
+        module = load_script_module()
+
+        module.remove_tree_same_device(root, root.stat().st_dev, root.stat().st_ino)
+
+        self.assertFalse(root.exists())
+
     def test_same_device_removal_refuses_in_place_content_change(self) -> None:
         root = self.root.parent / "in-place-race"
         root.mkdir()
@@ -3002,28 +3324,72 @@ class CodexTmpTest(unittest.TestCase):
         task = self.root / "producer-only"
         task.mkdir(parents=True)
 
-        payload = json.loads(
-            self.run_cli(
-                "hook",
-                input_data={
-                    "session_id": "producer-session",
-                    "cwd": str(task),
-                    "hook_event_name": "Stop",
-                    "secret_extra_field": "must-not-be-persisted",
-                },
-            ).stdout
+        result = self.run_cli(
+            "hook",
+            input_data={
+                "session_id": "producer-session",
+                "cwd": str(task),
+                "hook_event_name": "Stop",
+                "secret_extra_field": "must-not-be-persisted",
+            },
         )
 
-        self.assertTrue(payload["queued"])
+        self.assertEqual(json.loads(result.stdout), {"continue": True})
         self.assertFalse((task / ".codex-tmp-task.json").exists())
         self.assertFalse((self.state / "background.log").exists())
         queued = next((self.state / "pending-hooks").glob("*.json"))
         stored = json.loads(queued.read_text(encoding="utf-8"))
+        self.assertIn("internal_event_id", stored)
         self.assertNotIn("secret_extra_field", stored)
 
         self.run_cli("maintenance")
 
         self.assertTrue((task / ".codex-tmp-task.json").exists())
+        self.assertEqual(list((self.state / "pending-hooks").glob("*.json")), [])
+
+    def test_session_start_hook_returns_valid_protocol_json(self) -> None:
+        result = self.run_cli(
+            "hook",
+            input_data={
+                "session_id": "starting-session",
+                "cwd": str(self.root.parent),
+                "hook_event_name": "SessionStart",
+                "source": "startup",
+            },
+        )
+
+        self.assertEqual(json.loads(result.stdout), {"continue": True})
+        self.assertNotIn("queued", result.stdout)
+        self.assertNotIn("event_id", result.stdout)
+
+    def test_session_end_hook_succeeds_without_stdout(self) -> None:
+        result = self.run_cli(
+            "hook",
+            input_data={
+                "session_id": "ending-session",
+                "cwd": str(self.root.parent),
+                "hook_event_name": "SessionEnd",
+                "reason": "other",
+            },
+        )
+
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(len(list((self.state / "pending-hooks").glob("*.json"))), 1)
+
+    def test_hook_rejects_unsupported_event_without_queueing(self) -> None:
+        result = self.run_cli(
+            "hook",
+            input_data={
+                "session_id": "unsupported-session",
+                "cwd": str(self.root.parent),
+                "hook_event_name": "PreToolUse",
+            },
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("unsupported hook event: PreToolUse", result.stderr)
         self.assertEqual(list((self.state / "pending-hooks").glob("*.json")), [])
 
     def test_inventory_reports_old_auto_adopted_active_tasks(self) -> None:
