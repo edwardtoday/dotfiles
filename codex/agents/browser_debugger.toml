@@ -1,7 +1,7 @@
 name = "browser_debugger"
 description = "Browser-focused debugger for UI behavior, rendering, console errors, and network issues."
 nickname_candidates = ["browser", "browser-debugger", "ui-debug"]
-model = "gpt-5.3-codex"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 

@@ -1,0 +1,288 @@
+model_provider = "lab"
+model = "gpt-6.1-sol"
+default_permissions = ":danger-full-access"
+approvals_reviewer = "auto_review"
+model_reasoning_effort = "high"
+model_reasoning_summary = "auto"
+show_raw_agent_reasoning = false
+web_search = "live"
+personality = "pragmatic"
+sandbox_mode = "danger-full-access"
+approval_policy = "never"
+plan_mode_reasoning_effort = "high"
+notify = [ "/Users/qingpei/git/dotfiles/codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient", "turn-ended" ]
+service_tier = "default"
+
+[model_providers.lab]
+name = "OpenAI"
+base_url = "https://lab.sansi.io/v1"
+wire_api = "responses"
+requires_openai_auth = true
+env_key = "SUB2API_API_KEY"
+
+[features]
+shell_snapshot = true
+unified_exec = true
+multi_agent = true
+prevent_idle_sleep = true
+memories = true
+goals = true
+js_repl = false
+hooks = false
+
+[apps._default]
+enabled = true
+destructive_enabled = true
+open_world_enabled = true
+approvals_reviewer = "auto_review"
+default_tools_approval_mode = "approve"
+
+[agents]
+max_threads = 16
+max_depth = 2
+default_subagent_model = "gpt-6-luna"
+default_subagent_reasoning_effort = "high"
+
+[notice]
+hide_gpt5_1_migration_prompt = true
+
+[sandbox_workspace_write]
+network_access = true
+
+[desktop]
+open-local-url-in-target-preference = "in-app-browser"
+defaultTerminalLocation = "right"
+usePointerCursors = true
+mac-menu-bar-enabled = false
+appearanceTheme = "system"
+sansFontSize = 15
+followUpQueueMode = "queue"
+composerEnterBehavior = "cmdAlways"
+reviewDelivery = "inline"
+preventSleepWhileRunning = true
+keepRemoteControlAwakeWhilePluggedIn = true
+git-show-sidebar-pr-icons = true
+conversationDetailMode = "STEPS_COMMANDS"
+dock-icon-preference = "codex-system"
+show-context-window-usage = true
+notifications-turn-mode = "always"
+enabled-reasoning-efforts = [ "low", "medium", "high", "xhigh", "ultra", "max" ]
+external-agent-import-sync-enabled = false
+
+[desktop.external-agent-import-sync-item-types]
+SESSIONS = "original"
+CONFIG = "original"
+
+[tui]
+status_line = [ "model-with-reasoning", "context-remaining", "current-dir", "git-branch", "context-window-size" ]
+
+[tui.model_availability_nux]
+"gpt-5.6-sol" = 4
+
+[desktop.open-in-target-preferences]
+global = "fileManager"
+
+[desktop.open-in-target-preferences.perPath]
+"/Users/qingpei/git-sansi/qingpei/codex-session-archive" = "fileManager"
+
+[marketplaces.openai-bundled]
+last_updated = "2026-08-19T02:07:08Z"
+source_type = "local"
+source = "/Users/qingpei/.codex/.tmp/bundled-marketplaces/openai-bundled"
+
+[marketplaces.openai-primary-runtime]
+source_type = "local"
+source = "/Users/qingpei/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
+
+[plugins."cloudflare@openai-curated"]
+enabled = false
+
+[plugins."build-macos-apps@openai-curated"]
+enabled = true
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = true
+
+[plugins."visualize@openai-bundled"]
+enabled = true
+
+[plugins."template-creator@openai-primary-runtime"]
+enabled = true
+
+[plugins."remotion@openai-api-curated"]
+enabled = true
+
+[plugins."codex-app-tools@openai-bundled"]
+enabled = true
+
+[plugins."computer-use@openai-bundled"]
+enabled = true
+
+[[skills.config]]
+path = "/Users/qingpei/git/dotfiles/codex/skills/brand-guidelines/SKILL.md"
+enabled = false
+
+[[skills.config]]
+name = "build-macos-apps:appkit-interop"
+enabled = false
+
+[[skills.config]]
+name = "build-macos-apps:liquid-glass"
+enabled = false
+
+[[skills.config]]
+name = "build-macos-apps:packaging-notarization"
+enabled = false
+
+[[skills.config]]
+name = "build-macos-apps:signing-entitlements"
+enabled = false
+
+[[skills.config]]
+name = "build-macos-apps:swiftpm-macos"
+enabled = false
+
+[[skills.config]]
+name = "build-macos-apps:swiftui-patterns"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/git/dotfiles/codex/skills/claude-api/SKILL.md"
+enabled = false
+
+[[skills.config]]
+name = "build-macos-apps:window-management"
+enabled = false
+
+[[skills.config]]
+name = "build-macos-apps:view-refactor"
+enabled = false
+
+[[skills.config]]
+name = "build-macos-apps:test-triage"
+enabled = false
+
+[[skills.config]]
+name = "build-macos-apps:telemetry"
+enabled = false
+
+[[skills.config]]
+name = "build-macos-apps:build-run-debug"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/git/dotfiles/codex/skills/sora/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/git/dotfiles/codex/skills/speech/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/git/dotfiles/codex/skills/jupyter-notebook/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/git/dotfiles/codex/skills/.system/imagegen/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/.agents/skills/lark-vc-agent/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/.agents/skills/lark-vc/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/.agents/skills/lark-task/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/.agents/skills/lark-okr/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/.agents/skills/lark-minutes/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/.agents/skills/lark-im/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/.agents/skills/lark-event/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/.agents/skills/lark-drive/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/.agents/skills/lark-calendar/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/.agents/skills/lark-apps/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/.agents/skills/lark-approval/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/qingpei/.agents/skills/lark-mail/SKILL.md"
+enabled = false
+
+[shell_environment_policy.set]
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "9230e2bd8b24b7ac7a0ba6774c64bf0d78ecdabbdd91d0ed627b02a587bae2df"
+
+[mcp_servers]
+
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = ["chrome-devtools-mcp@latest", "--autoConnect"]
+
+[mcp_servers.pencil]
+command = "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64"
+args = ["--app", "desktop", "--agent", "claudeCodeCLI"]
+
+[mcp_servers.cua_repl]
+command = "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT"
+enabled = false
+
+[mcp_servers.node_repl]
+args = []
+command = "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node_repl"
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = "/Applications/ChatGPT.app/Contents/Resources/cua_node/lib/node_modules"
+NODE_REPL_NODE_PATH = "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node"
+NODE_REPL_TRUSTED_CODE_PATHS = "/Users/qingpei/.codex:/Applications/ChatGPT.app/Contents/Resources/cua_node/lib/node_modules"
+CODEX_HOME = "/Users/qingpei/.codex"
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+BROWSER_USE_TINYSKY_ENABLED = "1"
+NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
+NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
+NODE_REPL_INSTRUCTIONS_USE_CASE_COMPUTER_USE = "Control desktop apps on macOS through Computer Use."
+BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
+BROWSER_USE_CODEX_APP_VERSION = "26.915.31029"
+NODE_REPL_TRUSTED_SERVICES = '{"browser":"/Users/qingpei/.codex/plugins/cache/openai-bundled/browser/26.915.31029/scripts/browser-service.mjs","sky":"@oai/sky/service"}'
+SKY_CUA_SERVICE_PATH = "/Users/qingpei/.codex/computer-use/Codex Computer Use.app"
+CODEX_CLI_PATH = "/Applications/ChatGPT.app/Contents/Resources/codex"
+
+[mcp_servers.computer-use]
+command = "/Users/qingpei/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient"
+args = ["mcp"]
+enabled = false

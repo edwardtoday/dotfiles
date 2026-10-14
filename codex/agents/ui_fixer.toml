@@ -1,8 +1,8 @@
 name = "ui_fixer"
 description = "Implementation-focused frontend fixer for targeted UI bugs and interaction issues."
 nickname_candidates = ["ui-fixer", "frontend-fix", "interaction-fix"]
-model = "gpt-5.3-codex"
-model_reasoning_effort = "medium"
+model = "gpt-6-luna"
+model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 
 developer_instructions = """

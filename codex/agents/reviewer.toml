@@ -1,7 +1,7 @@
 name = "reviewer"
 description = "Read-only reviewer focused on correctness, regressions, and missing tests."
 nickname_candidates = ["reviewer", "code-review", "regression-check"]
-model = "gpt-5.4-mini"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 

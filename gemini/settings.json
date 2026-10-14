@@ -1,31 +1,6 @@
 {
-  "ide": {
-    "hasSeenNudge": true
-  },
-  "mcpServers": {
-    "chrome-devtools": {
-      "command": "npx",
-      "args": [
-        "chrome-devtools-mcp@latest"
-      ]
-    },
-    "pencil": {
-      "command": "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64",
-      "args": [
-        "--app",
-        "desktop"
-      ],
-      "env": {}
-    }
-  },
-  "security": {
-    "auth": {
-      "selectedType": "oauth-personal"
-    }
-  },
-  "ui": {
-    "theme": "Atom One",
-    "showMemoryUsage": true
+  "context": {
+    "discoveryMaxDirs": 2000
   },
   "general": {
     "previewFeatures": true,
@@ -35,7 +10,46 @@
       "warningAcknowledged": true
     }
   },
-  "context": {
-    "discoveryMaxDirs": 2000
+  "ide": {
+    "hasSeenNudge": true
+  },
+  "mcpServers": {
+    "chrome-devtools": {
+      "args": [
+        "chrome-devtools-mcp@latest",
+        "--autoConnect"
+      ],
+      "command": "npx",
+      "timeout": 60000
+    },
+    "pencil": {
+      "command": "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64",
+      "args": [
+        "--app",
+        "desktop",
+        "--agent",
+        "geminiCLI"
+      ],
+      "env": {}
+    },
+    "huashu-chrome": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "huashu-chrome",
+        "mcp",
+        "--client",
+        "gemini"
+      ]
+    }
+  },
+  "security": {
+    "auth": {
+      "selectedType": "oauth-personal"
+    }
+  },
+  "ui": {
+    "showMemoryUsage": true,
+    "theme": "Atom One"
   }
 }

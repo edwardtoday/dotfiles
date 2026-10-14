@@ -1,0 +1,10 @@
+{
+  "description": "Codex hooks keep lifecycle integration enabled; destructive cleanup remains manual.",
+  "hooks": {
+    "turn-ended": [
+      {
+        "command": ["/usr/bin/true"]
+      }
+    ]
+  }
+}

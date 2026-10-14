@@ -1,7 +1,7 @@
 name = "security_auditor"
 description = "Read-only security reviewer for secrets exposure, auth flaws, injection risks, and unsafe defaults."
 nickname_candidates = ["security", "security-auditor", "sec-review"]
-model = "gpt-5.3-codex"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 
