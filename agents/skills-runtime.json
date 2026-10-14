@@ -111,9 +111,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "80d55c71b95641948b995df6374ea78baead1925a9169e05affe54c1a4cbda35",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/80d55c71b95641948b995df6374ea78baead1925a9169e05affe54c1a4cbda35.tar.gz",
-      "archive_sha256": "43dcdb10df5cc289d68cabcd4c0bbeb1e2a00e65cee2ee921ab0135c13d6beea",
+      "tree_sha256": "2496a58279595d3c93dd66b0b8927baf0bb32467fc29a0a7d9d4b389ef6eece5",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/2496a58279595d3c93dd66b0b8927baf0bb32467fc29a0a7d9d4b389ef6eece5.tar.gz",
+      "archive_sha256": "58eac4f41637e41ae79a4da0e3909f2016fd2e3087d530105706560aacae81c1",
       "name": "delivery-quality-gate",
       "runtime_path": "/Users/qingpei/.agents/skills/delivery-quality-gate",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/delivery-quality-gate",
@@ -398,9 +398,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "18ab2caf0622feb1415858f7de5f7766f6f330675605bb375265a7b64f05baf0",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/18ab2caf0622feb1415858f7de5f7766f6f330675605bb375265a7b64f05baf0.tar.gz",
-      "archive_sha256": "2091908304a856bd50b43aab6d52b300eefb9b5a33564a46b800f868e0646af5",
+      "tree_sha256": "e8a91a553eaea03bcc5435a9733a4ca80cf1a2eb1159d86b80fec05e4d2fc367",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/e8a91a553eaea03bcc5435a9733a4ca80cf1a2eb1159d86b80fec05e4d2fc367.tar.gz",
+      "archive_sha256": "9e87d79a0037aacefaca6f537fb8c81e611673540c15b29ceb6c40f4df438d7d",
       "name": "markdown-report-pdf",
       "runtime_path": "/Users/qingpei/.agents/skills/markdown-report-pdf",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/markdown-report-pdf",
@@ -413,9 +413,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "d105214e40fe55da7099e5de7e572176efde05a15fbfdc904dce75e961bed52e",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/d105214e40fe55da7099e5de7e572176efde05a15fbfdc904dce75e961bed52e.tar.gz",
-      "archive_sha256": "18f1f68cdff877bb9e5ff1c704013c74118dc3ea91e28030dc13f118811fd947",
+      "tree_sha256": "ed940009a5e83ec27f7c6b4bb2b6a58572089b5de0b6df2c04588c3896dc38f9",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/ed940009a5e83ec27f7c6b4bb2b6a58572089b5de0b6df2c04588c3896dc38f9.tar.gz",
+      "archive_sha256": "74488f4a97ad88991b793937ff2b1b482b2fff102e8608e51b15363f828e32f6",
       "name": "minjin-proposal-radar",
       "runtime_path": "/Users/qingpei/.agents/skills/minjin-proposal-radar",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/minjin-proposal-radar",
@@ -593,9 +593,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "3da32baefbb531fdd315c76b35a300aea196195e02f40dbb78e0c1a65d1314cc",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/3da32baefbb531fdd315c76b35a300aea196195e02f40dbb78e0c1a65d1314cc.tar.gz",
-      "archive_sha256": "0f9693cdddb9e6dddd3b2d68c54d2435418bb501e71c86308abc98d1991586fa",
+      "tree_sha256": "18a981e641f4c8277da91149d5d81cb488a1966128458eecaccb90e55791e632",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/18a981e641f4c8277da91149d5d81cb488a1966128458eecaccb90e55791e632.tar.gz",
+      "archive_sha256": "58ab29c4e0af9d4df061b2809b3ca8f6599b3d7a3fa15422645539f7c4b15111",
       "name": "research",
       "runtime_path": "/Users/qingpei/.agents/skills/research",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/research",
@@ -668,9 +668,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "3edbfdafeb7d8bc5cdfeb768424292287fdd90759434e07be192c710ce29461d",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/3edbfdafeb7d8bc5cdfeb768424292287fdd90759434e07be192c710ce29461d.tar.gz",
-      "archive_sha256": "52452b649254508b5fb57532ee92f44859358e9ef71be36c646f47d74129bf9b",
+      "tree_sha256": "498647737ee739e4b5c0aa6d012ecf53e80c2bf25da3c6fb0112c3d93a13a19a",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/498647737ee739e4b5c0aa6d012ecf53e80c2bf25da3c6fb0112c3d93a13a19a.tar.gz",
+      "archive_sha256": "b9b4cec52bc6c91d489636eb1f1de9cb26aad01eedde6222bbb3ac436c05d5f8",
       "name": "strategy-research-report",
       "runtime_path": "/Users/qingpei/.agents/skills/strategy-research-report",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/strategy-research-report",
@@ -949,9 +949,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "33da767426c4bdf32d38ac6291fa2b5c044f40eea2dbd67414e49c2ae609979e",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/33da767426c4bdf32d38ac6291fa2b5c044f40eea2dbd67414e49c2ae609979e.tar.gz",
-      "archive_sha256": "72bd7b3e1ebac7282001f83c21cf7944a769125d9b3ba42176fea526604dad67",
+      "tree_sha256": "59fb5b4032ca0e3f9dbad8f49fd024f876a5384cec9d2ed7dc60ad4c2bcd12fb",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/59fb5b4032ca0e3f9dbad8f49fd024f876a5384cec9d2ed7dc60ad4c2bcd12fb.tar.gz",
+      "archive_sha256": "0b86a77340e5f9633b67911660b749fbe0b086129c37aadb6e71aa31b5780f00",
       "name": "miniflux-reading-secretary",
       "runtime_path": "/Users/qingpei/.codex/skills/miniflux-reading-secretary",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/miniflux-reading-secretary",
@@ -1083,5 +1083,5 @@
       "dependencies": []
     }
   ],
-  "updated_at": "2026-10-14T02:54:10Z"
+  "updated_at": "2026-10-14T03:34:31Z"
 }
