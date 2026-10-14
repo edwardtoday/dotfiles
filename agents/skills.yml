@@ -16,6 +16,11 @@ personal:
     - gitlab-pipeline-failure-triage
     - gitlab-wiki-export
     - markdown-report-pdf
+    - delivery-quality-gate
+    - miniflux-reading-secretary
+    - minjin-proposal-radar
+    - presentation-quality
+    - research
     - obsidian-meeting-filename-normalizer
     - optimize-end-to-end-systems
     - run-resumable-long-tasks
@@ -56,7 +61,6 @@ external_links:
   - { name: handoff, source: mattpocock, path: skills/productivity/handoff }
   - { name: implement, source: mattpocock, path: skills/engineering/implement }
   - { name: improve-codebase-architecture, source: mattpocock, path: skills/engineering/improve-codebase-architecture }
-  - { name: research, source: mattpocock, path: skills/engineering/research }
   - { name: resolving-merge-conflicts, source: mattpocock, path: skills/engineering/resolving-merge-conflicts }
   - { name: tdd, source: mattpocock, path: skills/engineering/tdd }
   - { name: teach, source: mattpocock, path: skills/productivity/teach }

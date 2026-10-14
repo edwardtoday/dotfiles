@@ -385,15 +385,17 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "129c2a7328a9ab82d74c07ea53fb654bebe9ab5ca7b2ef7e7b14495514be56d3",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/129c2a7328a9ab82d74c07ea53fb654bebe9ab5ca7b2ef7e7b14495514be56d3.tar.gz",
-      "archive_sha256": "979c267adc06038378ce7921c4205b443d206cf03e76d093a43573a7665eb4c0",
+      "tree_sha256": "d105214e40fe55da7099e5de7e572176efde05a15fbfdc904dce75e961bed52e",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/d105214e40fe55da7099e5de7e572176efde05a15fbfdc904dce75e961bed52e.tar.gz",
+      "archive_sha256": "18f1f68cdff877bb9e5ff1c704013c74118dc3ea91e28030dc13f118811fd947",
       "name": "minjin-proposal-radar",
       "runtime_path": "/Users/qingpei/.agents/skills/minjin-proposal-radar",
-      "source_path": "/Users/qingpei/.agents/skills/minjin-proposal-radar",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/minjin-proposal-radar",
       "origin": {
-        "kind": "unrecorded",
-        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/minjin-proposal-radar"
       },
       "dependencies": []
     },
@@ -563,18 +565,17 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "667f6876c8c26987e78659c62c2c9e4cb50bb8c5dee156ed16151218a8b4c5a8",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/667f6876c8c26987e78659c62c2c9e4cb50bb8c5dee156ed16151218a8b4c5a8.tar.gz",
-      "archive_sha256": "443226d75eec968df9ca8dd436b02472ba100795f81f6842ea221f4a2ca3ea5f",
+      "tree_sha256": "3da32baefbb531fdd315c76b35a300aea196195e02f40dbb78e0c1a65d1314cc",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/3da32baefbb531fdd315c76b35a300aea196195e02f40dbb78e0c1a65d1314cc.tar.gz",
+      "archive_sha256": "0f9693cdddb9e6dddd3b2d68c54d2435418bb501e71c86308abc98d1991586fa",
       "name": "research",
       "runtime_path": "/Users/qingpei/.agents/skills/research",
-      "source_path": "/Users/qingpei/.agents/skills/research",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/research",
       "origin": {
         "kind": "git",
-        "repository": "https://github.com/mattpocock/skills.git",
-        "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
-        "subdir": "skills/engineering/research",
-        "note": "Current snapshot may include reviewed local overrides; do not overwrite from upstream."
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/research"
       },
       "dependencies": []
     },
@@ -920,15 +921,17 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "f4dc7af540801c7e9e2a9e1f71327e6b2dad3b0b95631d66f7e6b6fa84df7557",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/f4dc7af540801c7e9e2a9e1f71327e6b2dad3b0b95631d66f7e6b6fa84df7557.tar.gz",
-      "archive_sha256": "7e3dec5dcb70c4dd1b887c3786c533cfa6ea552377d14ce63e608b3b90c481ae",
+      "tree_sha256": "33da767426c4bdf32d38ac6291fa2b5c044f40eea2dbd67414e49c2ae609979e",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/33da767426c4bdf32d38ac6291fa2b5c044f40eea2dbd67414e49c2ae609979e.tar.gz",
+      "archive_sha256": "72bd7b3e1ebac7282001f83c21cf7944a769125d9b3ba42176fea526604dad67",
       "name": "miniflux-reading-secretary",
       "runtime_path": "/Users/qingpei/.codex/skills/miniflux-reading-secretary",
-      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/miniflux-reading-secretary",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/miniflux-reading-secretary",
       "origin": {
-        "kind": "unrecorded",
-        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/miniflux-reading-secretary"
       },
       "dependencies": []
     },
@@ -977,10 +980,12 @@
       "archive_sha256": "b4fbd6f939b6da6ec1a80a6894ef5b5d6e20de6098167790c918e6371654a8fb",
       "name": "presentation-quality",
       "runtime_path": "/Users/qingpei/.codex/skills/presentation-quality",
-      "source_path": "/Users/qingpei/git/dotfiles/codex/skills/presentation-quality",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/presentation-quality",
       "origin": {
-        "kind": "unrecorded",
-        "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/presentation-quality"
       },
       "dependencies": []
     },
@@ -1048,7 +1053,22 @@
         "note": "No verified upstream entry; exact current local content is preserved, not attributed to an invented source."
       },
       "dependencies": []
+    },
+    {
+      "tree_sha256": "80d55c71b95641948b995df6374ea78baead1925a9169e05affe54c1a4cbda35",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/80d55c71b95641948b995df6374ea78baead1925a9169e05affe54c1a4cbda35.tar.gz",
+      "archive_sha256": "43dcdb10df5cc289d68cabcd4c0bbeb1e2a00e65cee2ee921ab0135c13d6beea",
+      "name": "delivery-quality-gate",
+      "runtime_path": "/Users/qingpei/.agents/skills/delivery-quality-gate",
+      "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/delivery-quality-gate",
+      "origin": {
+        "kind": "git",
+        "repository": "https://github.com/edwardtoday/agent-skills-private.git",
+        "ref": "main",
+        "subdir": "skills/delivery-quality-gate"
+      },
+      "dependencies": []
     }
   ],
-  "updated_at": "2026-09-14T13:59:33Z"
+  "updated_at": "2026-10-14T02:54:10Z"
 }
