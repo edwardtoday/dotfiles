@@ -1,41 +1,72 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require 'pathname'
+require 'json'
+require 'optparse'
 require 'yaml'
+require_relative '../agents/skill_catalog'
 
-repo_root = File.expand_path('..', __dir__)
-config = YAML.load_file(File.join(repo_root, 'agents', 'skills.yml'))
-home = Dir.home
-expand = ->(value) { File.expand_path(value.sub(%r{\A~}, home)) }
-runtime_root = expand.call(config.fetch('runtime_root'))
-state_root = expand.call(config.fetch('state_root'))
-expected = {}
-personal = config.fetch('personal')
-personal.fetch('skills').each { |name| expected[name] = File.join(state_root, 'personal', personal.fetch('source_subdir'), name) }
-config.fetch('external_links').each { |entry| expected[entry.fetch('name')] = File.join(state_root, 'sources', entry.fetch('source'), entry.fetch('path')) }
-
+repo = File.expand_path('..', __dir__)
+options = { config: File.join(repo, 'agents/skills.yml'), json: false }
+OptionParser.new do |parser|
+  parser.banner = 'Usage: agents-skills-audit [--config FILE] [--json]'
+  parser.on('--config FILE') { |v| options[:config] = v }
+  parser.on('--json') { options[:json] = true }
+end.parse!
+config = YAML.safe_load(File.read(options[:config]), permitted_classes: [], aliases: false)
+catalog_path = File.expand_path(config.fetch('runtime_catalog', 'skills-runtime.json'), File.dirname(options[:config]))
+abort("runtime catalog missing: #{catalog_path}") unless File.file?(catalog_path)
+catalog = JSON.parse(File.read(catalog_path))
 errors = []
-expected.each do |name, source|
-  target = File.join(runtime_root, name)
-  errors << "missing source SKILL.md: #{source}" unless File.file?(File.join(source, 'SKILL.md'))
-  errors << "missing runtime skill: #{target}" unless File.exist?(target)
-  if File.symlink?(target)
-    errors << "wrong link for #{name}: #{File.readlink(target)}" unless File.realpath(target) == File.realpath(source)
-  else
-    errors << "runtime skill is not managed symlink: #{target}"
+warnings = []
+verified = []
+known = {}
+cache = {}
+catalog.fetch('skills').each do |record|
+  path = SkillCatalog.expand(record.fetch('runtime_path'))
+  if known.key?(path)
+    errors << "duplicate runtime declaration: #{path}"
+    next
+  end
+  known[path] = true
+  unless File.file?(File.join(path, 'SKILL.md'))
+    errors << "missing skill entrypoint: #{path}"
+    next
+  end
+  begin
+    real = File.realpath(path)
+    digest = cache[real] ||= SkillCatalog.fingerprint(path)
+    errors << "unreviewed content drift: #{path}" unless digest == record.fetch('tree_sha256')
+    archive = SkillCatalog.expand(record.fetch('archive'))
+    if !File.file?(archive)
+      errors << "missing recovery snapshot: #{record.fetch('name')}"
+    elsif Digest::SHA256.file(archive).hexdigest != record.fetch('archive_sha256')
+      errors << "recovery snapshot checksum mismatch: #{record.fetch('name')}"
+    end
+    if record.fetch('origin').fetch('kind') == 'unrecorded'
+      warnings << "upstream provenance not recorded; local snapshot preserved: #{record.fetch('name')}"
+    end
+    record.fetch('dependencies', []).each do |name|
+      roots = catalog.fetch('runtime_roots').map { |r| SkillCatalog.expand(r) }
+      errors << "missing dependency #{name} required by #{record.fetch('name')}" unless roots.any? { |r| File.file?(File.join(r, name, 'SKILL.md')) }
+    end
+    verified << record.fetch('name') if digest == record.fetch('tree_sha256')
+  rescue SystemCallError, RuntimeError => e
+    errors << "#{record.fetch('name')}: #{e.message}"
   end
 end
-
-unclassified = config.fetch('unclassified_runtime_skills')
-unclassified.each do |name|
-  target = File.join(runtime_root, name)
-  errors << "unclassified runtime skill needs provenance: #{name}" if File.exist?(target)
+catalog.fetch('runtime_roots').each do |root|
+  Dir.glob(File.join(SkillCatalog.expand(root), '*', 'SKILL.md')).each do |entry|
+    path = File.dirname(entry)
+    errors << "unregistered runtime skill: #{path}" unless known.key?(path)
+  end
 end
-
-if errors.empty?
-  puts "managed skills: #{expected.length}; no managed-link drift"
-  exit 0
+result = { verified_entries: verified.length, errors: errors, provenance_warnings: warnings }
+if options[:json]
+  puts JSON.pretty_generate(result)
+else
+  puts "verified runtime entries: #{verified.length}; errors: #{errors.length}; provenance warnings: #{warnings.length}"
+  errors.each { |message| warn "ERROR #{message}" }
+  warn "Use --json to inspect unresolved provenance; snapshots do not establish upstream authorship." unless warnings.empty?
 end
-warn errors.join("\n")
-exit 1
+exit(errors.empty? ? 0 : 1)

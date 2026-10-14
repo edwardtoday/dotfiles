@@ -1,0 +1,63 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require 'optparse'
+require 'yaml'
+require_relative '../agents/skill_catalog'
+
+repo = File.expand_path('..', __dir__)
+options = { all: false, names: [], config: File.join(repo, 'agents/skills.yml') }
+OptionParser.new do |parser|
+  parser.banner = 'Usage: agents-skills-snapshot --all | --skill NAME [--config FILE]'
+  parser.on('--all', 'Record all current personal runtime skills after review') { options[:all] = true }
+  parser.on('--skill NAME', 'Record only a reviewed skill; repeat as needed') { |name| options[:names] << name }
+  parser.on('--config FILE') { |file| options[:config] = file }
+end.parse!
+abort('explicit --all or --skill NAME is required') unless options[:all] || !options[:names].empty?
+config = YAML.safe_load(File.read(options[:config]), permitted_classes: [], aliases: false)
+file = File.expand_path(config.fetch('runtime_catalog', 'skills-runtime.json'), File.dirname(options[:config]))
+# 不同任务分别更新快照时串行合并台账，避免后写覆盖其他任务记录。
+catalog_lock = File.open(file + '.lock', File::RDWR | File::CREAT, 0o600)
+catalog_lock.flock(File::LOCK_EX)
+at_exit { catalog_lock.flock(File::LOCK_UN); catalog_lock.close }
+catalog = File.file?(file) ? JSON.parse(File.read(file)) : { 'version' => 1, 'runtime_roots' => [config.fetch('runtime_root'), '~/.codex/skills'], 'skills' => [] }
+lock_path = SkillCatalog.expand(config.fetch('installer_lock'))
+lock = File.file?(lock_path) ? JSON.parse(File.read(lock_path)).fetch('skills', {}) : {}
+records = catalog.fetch('skills').to_h { |entry| [entry.fetch('runtime_path'), entry] }
+selected = []
+catalog.fetch('runtime_roots').each do |root|
+  Dir.glob(File.join(SkillCatalog.expand(root), '*', 'SKILL.md')).sort.each do |entry|
+    directory = File.dirname(entry)
+    name = File.basename(directory)
+    next unless options[:all] || options[:names].include?(name)
+    selected << name
+    origin = if config.fetch('personal').fetch('skills').include?(name)
+               { 'kind' => 'git', 'repository' => config.fetch('personal').fetch('repository'), 'ref' => config.fetch('personal').fetch('ref'), 'subdir' => "skills/#{name}" }
+             elsif (external = config.fetch('external_links').find { |item| item.fetch('name') == name })
+               source = config.fetch('sources').fetch(external.fetch('source'))
+               { 'kind' => 'git', 'repository' => source.fetch('repository'), 'revision' => source.fetch('revision'), 'subdir' => external.fetch('path'), 'note' => 'Current snapshot may include reviewed local overrides; do not overwrite from upstream.' }
+             elsif lock.key?(name)
+               item = lock.fetch(name)
+               { 'kind' => 'installer', 'repository' => item['sourceUrl'], 'skill_path' => item['skillPath'], 'installer_folder_hash' => item['skillFolderHash'] }
+             else
+               { 'kind' => 'unrecorded', 'note' => 'No verified upstream entry; exact current local content is preserved, not attributed to an invented source.' }
+             end
+    snapshot = SkillCatalog.snapshot(directory, File.join(SkillCatalog.expand(config.fetch('state_root')), 'snapshots'))
+    body = File.read(entry)
+    dependencies = name.start_with?('wecomcli-') ? body.scan(/\bwecomcli-[a-z-]+\b/).uniq.reject { |n| n == name } : []
+    records[directory] = snapshot.merge('name' => name, 'runtime_path' => directory, 'source_path' => File.realpath(directory), 'origin' => origin, 'dependencies' => dependencies)
+  end
+end
+missing = options[:names] - selected
+abort("requested skills not found: #{missing.join(', ')}") unless missing.empty?
+catalog['skills'] = records.values.sort_by { |entry| entry.fetch('runtime_path') }
+catalog['updated_at'] = Time.now.utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+temporary = "#{file}.#{Process.pid}.tmp"
+begin
+  File.write(temporary, JSON.pretty_generate(catalog) + "\n")
+  File.rename(temporary, file)
+ensure
+  File.unlink(temporary) if File.exist?(temporary)
+end
+puts "snapshotted #{selected.length} runtime entries; catalog: #{file}"

@@ -5,16 +5,20 @@ require 'fileutils'
 require 'optparse'
 require 'pathname'
 require 'yaml'
+require 'json'
+require_relative '../agents/skill_catalog'
 
-options = { adopt: false, dry_run: false }
+options = { adopt: false, dry_run: false, config: File.expand_path('../agents/skills.yml', __dir__), snapshot: nil }
 OptionParser.new do |parser|
-  parser.banner = 'Usage: agents-skills-restore [--adopt] [--dry-run]'
+  parser.banner = 'Usage: agents-skills-restore [--adopt] [--dry-run] [--config FILE] [--restore-snapshot NAME]'
+  parser.on('--config FILE') { |v| options[:config] = v }
+  parser.on('--restore-snapshot NAME', 'Restore a missing skill from its verified local snapshot') { |v| options[:snapshot] = v }
   parser.on('--adopt', 'Replace identical real directories with managed symlinks') { options[:adopt] = true }
   parser.on('--dry-run', 'Report without writing') { options[:dry_run] = true }
 end.parse!
 
 repo_root = File.expand_path('..', __dir__)
-config = YAML.load_file(File.join(repo_root, 'agents', 'skills.yml'))
+config = YAML.safe_load(File.read(options[:config]), permitted_classes: [], aliases: false)
 home = Dir.home
 expand = ->(value) { File.expand_path(value.sub(%r{\A~}, home)) }
 runtime_root = expand.call(config.fetch('runtime_root'))
@@ -31,12 +35,20 @@ end
 def ensure_checkout(name:, repository:, revision:, root:, dry_run:)
   target = File.join(root, name)
   FileUtils.mkdir_p(File.dirname(target)) unless dry_run
-  if File.directory?(File.join(target, '.git'))
+  if File.exist?(File.join(target, '.git'))
+    require 'open3'
+    status, command_status = Open3.capture2('git', '-C', target, 'status', '--porcelain')
+    abort("cannot inspect checkout: #{target}") unless command_status.success?
+    unless status.empty?
+      puts "[preserved dirty source] #{target}; skipping fetch/checkout"
+      return target
+    end
     run!('git', '-C', target, 'fetch', '--quiet', 'origin', dry_run: dry_run)
   else
     run!('git', 'clone', '--quiet', repository, target, dry_run: dry_run)
   end
-  run!('git', '-C', target, 'checkout', '--quiet', '--detach', revision, dry_run: dry_run) if revision
+  checkout_ref = revision&.match?(/\A[[:alnum:]_.\/-]+\z/) && !revision.match?(/\A[0-9a-f]{40}\z/) ? "origin/#{revision}" : revision
+  run!('git', '-C', target, 'checkout', '--quiet', '--detach', checkout_ref, dry_run: dry_run) if checkout_ref
   target
 end
 
@@ -77,6 +89,45 @@ def link_skill(name:, source:, runtime_root:, adopt:, backup_root:, dry_run:)
   FileUtils.mkdir_p(runtime_root)
   FileUtils.ln_s(source, target)
 end
+
+catalog_path = File.expand_path(config.fetch('runtime_catalog', 'skills-runtime.json'), File.dirname(options[:config]))
+if File.file?(catalog_path)
+  catalog = JSON.parse(File.read(catalog_path))
+  records = catalog.fetch('skills')
+  if options[:snapshot]
+    records = records.select { |record| record.fetch('name') == options[:snapshot] }
+    abort('snapshot name is missing or ambiguous') unless records.length == 1
+  end
+  failures = []
+  records.each do |record|
+    target = SkillCatalog.expand(record.fetch('runtime_path'))
+    if File.exist?(target) || File.symlink?(target)
+      begin
+        if File.file?(File.join(target, 'SKILL.md')) && SkillCatalog.fingerprint(target) == record.fetch('tree_sha256')
+          next
+        end
+      rescue SystemCallError, RuntimeError
+        # 现有内容或链接已变化时保留现场，绝不以快照覆盖。
+      end
+      failures << "preserved existing drift: #{target}"
+      next
+    end
+    if options[:dry_run]
+      puts "[restore snapshot] #{target}"
+      next
+    end
+    begin
+      SkillCatalog.restore(record, File.join(state_root, 'materialized'))
+      puts "[restored] #{target}"
+    rescue SystemCallError, RuntimeError, Zlib::Error => e
+      failures << "#{record.fetch('name')}: #{e.message}"
+    end
+  end
+  failures.each { |message| warn message }
+  puts "catalog entries checked: #{records.length}; preserved/failures: #{failures.length}"
+  exit(failures.empty? ? 0 : 1)
+end
+abort('runtime catalog required for --restore-snapshot') if options[:snapshot]
 
 FileUtils.mkdir_p(state_root) unless options[:dry_run]
 personal = config.fetch('personal')
