@@ -3627,7 +3627,7 @@ class CodexTmpTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0)
         self.assertEqual((state / "launchd.log").read_text(encoding="utf-8"), "maintenance-ok\n")
-        self.assertEqual(plist["ProgramArguments"], ["/Users/qingpei/.bin/codex-tmp-launchd"])
+        self.assertEqual(plist["ProgramArguments"], ["__HOME__/.bin/codex-tmp-launchd"])
         self.assertNotIn("StandardOutPath", plist)
         self.assertNotIn("StandardErrorPath", plist)
 
