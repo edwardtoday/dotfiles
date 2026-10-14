@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+status=0
+
+# Only files that are sourced or installed as runtime configuration are part of
+# this check. Historical caches, generated indexes, binaries, and examples are
+# intentionally outside the portability contract.
+files=(
+  install.rb profile bash_profile bashrc zprofile zshrc shellpaths shellvars
+  shellaliases gitconfig npmrc
+  launchd/*.plist
+  bin/codex-tmp bin/*-launchd
+)
+
+for file in "${files[@]}"; do
+  [[ -f "$root/$file" ]] || continue
+  if rg -n --pcre2 '(/Users/[^/$" ]+/|/Volumes/(?!\*)[^/" ]+/|/home/[^/$" ]+/)' "$root/$file" >/tmp/dotfiles-portability-hit.$$ 2>/dev/null; then
+    printf '%s\n' "[portability] $file"
+    cat /tmp/dotfiles-portability-hit.$$
+    status=1
+  fi
+done
+rm -f /tmp/dotfiles-portability-hit.$$
+
+if [[ "$status" -ne 0 ]]; then
+  printf '%s\n' '[portability] hard-coded host paths found' >&2
+  exit "$status"
+fi
+
+printf '%s\n' '[portability] ok'

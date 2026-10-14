@@ -1,0 +1,5 @@
+name: MinerU
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10

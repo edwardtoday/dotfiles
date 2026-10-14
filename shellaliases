@@ -176,17 +176,24 @@ fi
 export LS_COLORS='no=00:fi=00:di=01;34:ln=01;36:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arj=01;31:*.taz=01;31:*.lzh=01;31:*.zip=01;31:*.z=01;31:*.Z=01;31:*.gz=01;31:*.bz2=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.jpg=01;35:*.jpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.avi=01;35:*.fli=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.ogg=01;35:*.mp3=01;35:*.wav=01;35:'
 
 # List all files colorized in long format
-alias l="ls -lF ${colorflag}"
-
-# List all files colorized in long format, including dot files
-alias la="ls -laF ${colorflag}"
-
-# List only directories
-alias lsd="ls -lF ${colorflag} | grep --color=never '^d'"
-
-# Always use color output for `ls`
 alias ls="command ls ${colorflag} -h -p"
-alias ll="command ls ${colorflag} -l -h -p"
+
+if command -v eza >/dev/null 2>&1; then
+        alias l='eza -l --color=auto --icons=never --classify=always'
+        alias la='eza -laa --color=auto --icons=never --classify=always'
+        alias lsd='eza -l -D --color=auto --icons=never --classify=always'
+        alias ll='eza -l --color=auto --icons=never'
+else
+        alias l="ls -lF ${colorflag}"
+
+        # List all files colorized in long format, including dot files
+        alias la="ls -laF ${colorflag}"
+
+        # List only directories
+        alias lsd="ls -lF ${colorflag} | grep --color=never '^d'"
+
+        alias ll="command ls ${colorflag} -l -h -p"
+fi
 
 # SCM cleanup
 alias svn-clean='pwd && find . -type d -name .svn -print0 | xargs -0 rm -rf'
@@ -200,7 +207,7 @@ alias brew='/opt/homebrew/bin/brew'
 #############################################################################
 alias update.pip3distribute='cd ~/Downloads && curl -O http://python-distribute.org/distribute_setup.py && sudo python3 distribute_setup.py && rm distribute_setup.py distribute-*.tar.gz'
 
-alias update.brew='brew update; brew upgrade; brew autoremove; brew cleanup --prune=all -s'
+alias update.brew='brew update; brew upgrade --yes; brew autoremove; brew cleanup --prune=all -s'
 # alias update.ibrew='ibrew update; ibrew upgrade; ibrew autoremove; ibrew cleanup --prune=all -s'
 alias update.mac='sudo softwareupdate -i -a'
 alias update.npm='npm install -g npm@latest; npm update -g'

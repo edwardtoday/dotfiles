@@ -31,7 +31,15 @@ export PATH=$HOME/Qt5.1.1/5.1.1/gcc_64/bin:$PATH
 export PATH=/usr/lib64/ccache:$PATH
 
 # Android
-export ANDROID_HOME=/usr/local/opt/android-sdk
+# 仅在本机存在 SDK 目录时导出，避免旧路径污染 adb / Android 工具链。
+if [ -d "$HOME/Library/Android/sdk" ]; then
+  export ANDROID_HOME="$HOME/Library/Android/sdk"
+  export ANDROID_SDK_ROOT="$ANDROID_HOME"
+  export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+else
+  unset ANDROID_HOME
+  unset ANDROID_SDK_ROOT
+fi
 
 # fastlane
 export PATH="$HOME/.fastlane/bin:$PATH"
@@ -39,18 +47,24 @@ export PATH="$HOME/.fastlane/bin:$PATH"
 # Brew
 export PATH=/opt/homebrew/bin:$PATH
 export PATH=/opt/homebrew/sbin:$PATH
+export PATH="/opt/homebrew/opt/imagemagick-full/bin:$PATH"
 
 # Python3
+export PATH=~/Library/Python/3.14/bin:$PATH
 export PATH=~/Library/Python/3.11/bin:$PATH
 
 # mysql-client
 export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
 
 # uv
-export PATH="/Users/qingpei/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 
 # Homebrew OpenJDK as default
-export JAVA_HOME="/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home"
-export PATH="$JAVA_HOME/bin:$PATH"
+if [ -d "/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home" ]; then
+  export JAVA_HOME="/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home"
+  export PATH="$JAVA_HOME/bin:$PATH"
+else
+  unset JAVA_HOME
+fi
 
 eval "$(/opt/homebrew/bin/brew shellenv)"

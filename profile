@@ -1,3 +1,7 @@
+# The following lines were added by Docker Desktop to add commands to your PATH.
+export PATH="$PATH:$HOME/.docker/bin"
+# End of Docker Desktop section.
+
 #############################################################
 # Generic configuration that applies to all shells
 #############################################################
@@ -12,4 +16,4 @@ done
 unset file
 
 # Added by LM Studio CLI (lms)
-export PATH="$PATH:/Users/qingpei/.lmstudio/bin"
+export PATH="$PATH:$HOME/.lmstudio/bin"

@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+TMUTIL_BIN="${TMUTIL_BIN:-/usr/bin/tmutil}"
+MODE="dry-run"
+ROOTS=()
+
+usage() {
+  cat <<'EOF'
+Usage: tm-exclude-dev-artifacts [--dry-run|--apply|--remove] [--root PATH ...]
+
+Adds fixed-path Time Machine exclusions for reproducible developer data:
+- package-manager installations, global tools, and generated application caches
+- reinstallable Xcode, Command Line Tools, and MacTeX installations
+- node_modules directories
+- conventionally named Python virtual environments
+- Rust target directories next to Cargo.toml
+
+The default mode is --dry-run. Use --remove to roll back matching exclusions.
+Default roots are ~/git and ~/git-sansi.
+EOF
+}
+
+add_candidate() {
+  local candidate="$1"
+
+  if [ -e "$candidate" ] || [ -L "$candidate" ]; then
+    printf '%s\n' "$candidate" >> "$CANDIDATES_FILE"
+  fi
+}
+
+collect_static_candidates() {
+  local xcode_app
+
+  add_candidate "/opt/homebrew"
+  add_candidate "/usr/local/texlive"
+  add_candidate "/Applications/TeX"
+  add_candidate "/Library/TeX"
+  add_candidate "/Library/Developer/CommandLineTools"
+  add_candidate "/Library/Developer/XcodeServer"
+
+  add_candidate "$HOME/.npm"
+  add_candidate "$HOME/.cache"
+  add_candidate "$HOME/.gem"
+  add_candidate "$HOME/.rustup/toolchains"
+  add_candidate "$HOME/.local/share/uv"
+  add_candidate "$HOME/go/pkg"
+  add_candidate "$HOME/miniforge3"
+  add_candidate "$HOME/Library/pnpm/store"
+  add_candidate "$HOME/.vscode/extensions"
+  add_candidate "$HOME/Library/Application Support/.GMTemporary"
+  add_candidate "$HOME/Library/Application Support/coreMLCache"
+  add_candidate "$HOME/Library/Application Support/Caches"
+  add_candidate "$HOME/Library/Application Support/Poe/Cache"
+  add_candidate "$HOME/Library/Application Support/Poe/Code Cache"
+  add_candidate "$HOME/Library/Application Support/Texpad/Bundles"
+  add_candidate "$HOME/Library/Containers/com.tencent.WeWorkMac/Data/Documents/cefcache"
+
+  while IFS= read -r xcode_app; do
+    add_candidate "$xcode_app"
+  done < <(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' ! -name 'Xcodes.app' -print 2>/dev/null)
+}
+
+collect_root_candidates() {
+  local root="$1"
+  local cargo_manifest
+  local target_dir
+
+  [ -d "$root" ] || return 0
+
+  find -x "$root" -type d \
+    \( -name node_modules -o -name '.venv*' -o -name venv -o -name 'venv-*' \) \
+    -print -prune 2>/dev/null >> "$CANDIDATES_FILE"
+
+  while IFS= read -r cargo_manifest; do
+    target_dir="$(dirname "$cargo_manifest")/target"
+    add_candidate "$target_dir"
+  done < <(find -x "$root" -type f -name Cargo.toml -print 2>/dev/null)
+}
+
+apply_candidates() {
+  local candidate
+  local count=0
+
+  while IFS= read -r candidate; do
+    [ -n "$candidate" ] || continue
+    count=$((count + 1))
+
+    case "$MODE" in
+      apply)
+        "$TMUTIL_BIN" addexclusion -p "$candidate"
+        printf 'excluded: %s\n' "$candidate"
+        ;;
+      remove)
+        "$TMUTIL_BIN" removeexclusion -p "$candidate"
+        printf 'included: %s\n' "$candidate"
+        ;;
+      dry-run)
+        printf 'would exclude: %s\n' "$candidate"
+        ;;
+    esac
+  done < <(sort -u "$CANDIDATES_FILE")
+
+  printf 'candidate count: %d\n' "$count"
+}
+
+main() {
+  local candidate_root
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --dry-run)
+        MODE="dry-run"
+        ;;
+      --apply)
+        MODE="apply"
+        ;;
+      --remove)
+        MODE="remove"
+        ;;
+      --root)
+        shift
+        [ "$#" -gt 0 ] || { echo 'missing path after --root' >&2; exit 2; }
+        ROOTS+=("$1")
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        printf 'unknown argument: %s\n' "$1" >&2
+        usage >&2
+        exit 2
+        ;;
+    esac
+    shift
+  done
+
+  CANDIDATES_FILE="$(mktemp)"
+  trap 'rm -f "$CANDIDATES_FILE"' EXIT
+
+  if [ "${#ROOTS[@]}" -eq 0 ]; then
+    ROOTS=("$HOME/git" "$HOME/git-sansi")
+  fi
+
+  if [ "$MODE" != "dry-run" ] && [ "$TMUTIL_BIN" = "/usr/bin/tmutil" ] && [ "$(id -u)" -ne 0 ]; then
+    echo 'fixed-path Time Machine exclusions require administrator privileges' >&2
+    echo "run: sudo HOME='$HOME' $0 --$MODE" >&2
+    exit 1
+  fi
+
+  collect_static_candidates
+  for candidate_root in "${ROOTS[@]}"; do
+    collect_root_candidates "$candidate_root"
+  done
+  apply_candidates
+}
+
+main "$@"

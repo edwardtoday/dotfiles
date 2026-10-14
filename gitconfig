@@ -35,7 +35,7 @@
 	compression = 9
 	excludesfile = ~/.gitignore
 	attributesfile = ~/.gitattributes
-	pager = less -F -X
+	pager = delta
 	quotepath = false
 	safecrlf = warn
 	# Treat spaces before tabs, lines that are indented with 8 or more spaces, and
@@ -98,6 +98,7 @@
 	summary = true
 	log = true
 	tool = p4merge
+	conflictStyle = zdiff3
 
 [mergetool]
 	trustExitCode = false
@@ -105,7 +106,7 @@
 	keepBackup = false
 
 [mergetool "p4merge"]
-	path = /Users/edwardtoday/.bin/p4merge
+	path = ~/.bin/p4merge
 
 [pack]
 	threads = 0
@@ -303,3 +304,7 @@
 	process = git-lfs filter-process
 [include]
 	path = ~/.gitconfig.local
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true

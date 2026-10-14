@@ -1,0 +1,12 @@
+name: base
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip
+  - conda
+  - mamba
+  - libarchive==3.7.7
+  - conda-forge::libmambapy
+  - conda-libmamba-solver==25.4.0
+  - conda-forge::libmamba

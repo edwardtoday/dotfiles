@@ -2,10 +2,10 @@
 
 ## Agent Configuration
 
-- `AGENTS.md` 现在只保留全局基线规则，安装脚本会将它软链接为 `~/.AGENTS.md`；低频、专题化规则拆分存放在 `AGENTS.d/`，`~/.codex/AGENTS.md` 等入口文件会统一指向同一套规则。
-- 维护规则时，优先把高频、稳定、跨项目的内容放进 `AGENTS.md`，把长篇、专题化或项目特例放进 `AGENTS.d/` 或项目级 `AGENTS.md`；GitLab / MR 约定详见 `AGENTS.d/gitlab.md`。
+- `AGENTS.md` 只保留跨项目、长期稳定且会改变执行结果的用户偏好，安装脚本会将它软链接为 `~/.AGENTS.md`，`~/.codex/AGENTS.md` 等入口文件统一指向同一份基线。
+- 专题工作流放在 `~/.agents/skills` 管理的全局 user skills，项目特例放项目级 `AGENTS.md`；`AGENTS.d/` 仅保留不参与自动发现的人工参考资料。
 - 技术指南存放于 `docs/tech-guides/`，默认优先读取本地文件；仅在需要跨仓库引用或外部访问时，再使用对应的 Raw 链接。
-- 跨轮次任务制品使用 `codex-tmp create <task>` 建在持久化的 `~/.codex/tmp`。任务完成后由 `codex-tmp complete <task>` 进入受保护的后台回收流程；已完成且可从 T7、远端或外置 evidence 恢复的大任务，可显式用 `codex-tmp compact` 排队，在短宽限后后台替换为 recovery stub，提前释放主体空间。未托管、活跃、保留、dirty Git、linked worktree 或内容变化的目录不会自动移动。使用 `codex-tmp inventory` 查看状态，使用 `codex-tmp restore <id-or-name>` 从 14 天隔离窗口恢复。
+- `~/.codex/tmp` 只承载跨轮次、跨重启仍需恢复的临时制品；模型优先复用 T7 Git 仓库和共享 Node/Python 环境。`codex-tmp inspect [task]` 只扫描 tmp，并从其中 Git 工作区的脱敏 remote 推导 T7 canonical 迁移目标，不遍历 T7；`codex-tmp recommend [task]` 生成绑定 owner session 的建议包，`codex-tmp clean <recommendation-id>` 只执行已记录且重新验证通过的清理建议。旧的 lifecycle、quarantine 和 restore 命令继续作为兼容与回滚能力，不再是创建临时文件的强制入口。
 
 ## Installation
 
@@ -25,17 +25,36 @@ To update, `cd` into your local `dotfiles` repository and then:
 
 If a target dot-directory already exists as a real directory instead of a symlink, the installer leaves it in place and prints a skip message so you can migrate it manually.
 
+`~/.codex` is always host-local. The installer never links or replaces its live `config.toml` (Codex and CC Switch edit it). It links the portable `config.common.toml` reference and project-index helper, and creates a private `projects.local.toml` only when missing. Review that file's paths before applying it. On a host without access to the private agent-skills source, use `./install.rb --skip-agent-skills`; core dotfiles initialization still succeeds if the optional skill restore fails.
+
 ### Agent skills
 
-`~/.agents/skills` is managed as a link farm. Personal skills are checked out from the private repository declared in [`agents/skills.yml`](agents/skills.yml); third-party skills are cloned from pinned upstream Git revisions, so their source is not copied into the personal repository. `./install.rb` runs the safe restore automatically.
+[`agents/skills.yml`](agents/skills.yml) retains pinned Git sources and installer provenance. [`agents/skills-runtime.json`](agents/skills-runtime.json) records the exact reviewed runtime content at both personal skill locations, including intentional local overrides. Copies and symlinks are supported; a matching fingerprint does not claim that an unknown upstream source has been verified.
 
 ```bash
+./bin/agents-skills-audit
+./bin/agents-skills-audit --json
 ./bin/agents-skills-restore --dry-run
-./bin/agents-skills-restore --adopt
+./bin/agents-skills-snapshot --skill research
+./bin/agents-skills-restore --restore-snapshot research
+```
+
+Run `agents-skills-snapshot --skill NAME` only after reviewing and validating your own authorized skill change. Preserve unrelated concurrent drift for its owning task; do not rebaseline it just to make the audit pass. `--all` explicitly records every currently installed personal skill. Snapshot archives live under `~/.local/share/agent-skills/snapshots/`; include that directory with the catalog in configuration backups and host migrations. The catalog alone does not contain the skill bytes. Recording a snapshot verifies content fidelity, not upstream trust or behavioral quality.
+
+With a runtime catalog present, restore recreates missing skills from verified archives and refuses to overwrite existing drift or broken links. It does not fetch or switch source repositories. Without a catalog, the earlier pinned-source restore remains available; dirty source checkouts are preserved, and `--adopt` replaces only identical real directories after backup. `./install.rb` invokes this same restore entrypoint.
+
+### Codex configuration checks
+
+The Lab provider uses the existing `SUB2API_API_KEY` environment variable; keep it available to both terminal and desktop launches. The secret value remains outside tracked configuration. Model defaults, Full Access, and existing production automation authorization are managed separately from this change.
+
+After a configuration update, check strict loading with the installed CLI and desktop binary, inspect the relevant MCP/skill discovery results, and run the focused checks:
+
+```bash
+python3 -m unittest discover -s tests -p test_agents_skills_catalog.py
 ./bin/agents-skills-audit
 ```
 
-`--adopt` replaces only a real skill directory that is byte-for-byte identical to its declared source, moving the old directory to `~/.agents/backups/` first. Any other existing skill is left unchanged and reported as drift. Entries marked `unclassified_runtime_skills` require upstream provenance before the restore script will manage them.
+Do not treat parsing, snapshots, or plugin enablement as proof of a successful business operation. Use the task's actual output check. Existing conversations can retain old configuration; verify newly created sessions without restarting active work.
 
 ### Ghostty
 

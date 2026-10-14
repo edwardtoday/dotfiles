@@ -1,0 +1,8 @@
+name: ew2l
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - libjpeg-turbo
+  - libpng
+  - pytorch

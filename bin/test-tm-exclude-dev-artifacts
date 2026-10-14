@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEST_ROOT="$(mktemp -d)"
+FAKE_HOME="$TEST_ROOT/home"
+FAKE_REPOS="$FAKE_HOME/repos"
+TMUTIL_LOG="$TEST_ROOT/tmutil.log"
+FAKE_TMUTIL="$TEST_ROOT/tmutil"
+
+cleanup() {
+  rm -rf "$TEST_ROOT"
+}
+
+trap cleanup EXIT
+
+mkdir -p \
+  "$FAKE_HOME/.npm" \
+  "$FAKE_HOME/.gem" \
+  "$FAKE_HOME/.local/share/uv" \
+  "$FAKE_HOME/go/pkg" \
+  "$FAKE_HOME/miniforge3" \
+  "$FAKE_HOME/Library/Application Support/Poe/Cache" \
+  "$FAKE_HOME/Library/Containers/com.tencent.WeWorkMac/Data/Documents/cefcache" \
+  "$FAKE_REPOS/frontend/node_modules" \
+  "$FAKE_REPOS/python/.venv311" \
+  "$FAKE_REPOS/rust/target" \
+  "$FAKE_REPOS/not-rust/target"
+touch "$FAKE_REPOS/rust/Cargo.toml"
+
+cat > "$FAKE_TMUTIL" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$TMUTIL_LOG"
+EOF
+chmod +x "$FAKE_TMUTIL"
+
+dry_run_output="$(HOME="$FAKE_HOME" "$SCRIPT_DIR/tm-exclude-dev-artifacts" --dry-run --root "$FAKE_REPOS")"
+
+grep -Fq "would exclude: $FAKE_HOME/.npm" <<< "$dry_run_output"
+grep -Fq "would exclude: $FAKE_HOME/.gem" <<< "$dry_run_output"
+grep -Fq "would exclude: $FAKE_HOME/.local/share/uv" <<< "$dry_run_output"
+grep -Fq "would exclude: $FAKE_HOME/go/pkg" <<< "$dry_run_output"
+grep -Fq "would exclude: $FAKE_HOME/miniforge3" <<< "$dry_run_output"
+grep -Fq "would exclude: $FAKE_HOME/Library/Application Support/Poe/Cache" <<< "$dry_run_output"
+grep -Fq "would exclude: $FAKE_HOME/Library/Containers/com.tencent.WeWorkMac/Data/Documents/cefcache" <<< "$dry_run_output"
+grep -Fq "would exclude: $FAKE_REPOS/frontend/node_modules" <<< "$dry_run_output"
+grep -Fq "would exclude: $FAKE_REPOS/python/.venv311" <<< "$dry_run_output"
+grep -Fq "would exclude: $FAKE_REPOS/rust/target" <<< "$dry_run_output"
+if grep -Fq "$FAKE_REPOS/not-rust/target" <<< "$dry_run_output"; then
+  echo 'non-Rust target directory was incorrectly selected' >&2
+  exit 1
+fi
+
+HOME="$FAKE_HOME" TMUTIL_BIN="$FAKE_TMUTIL" \
+  "$SCRIPT_DIR/tm-exclude-dev-artifacts" --apply --root "$FAKE_REPOS" >/dev/null
+
+grep -Fq "addexclusion -p $FAKE_HOME/.npm" "$TMUTIL_LOG"
+grep -Fq "addexclusion -p $FAKE_HOME/.gem" "$TMUTIL_LOG"
+grep -Fq "addexclusion -p $FAKE_HOME/.local/share/uv" "$TMUTIL_LOG"
+grep -Fq "addexclusion -p $FAKE_HOME/go/pkg" "$TMUTIL_LOG"
+grep -Fq "addexclusion -p $FAKE_HOME/miniforge3" "$TMUTIL_LOG"
+grep -Fq "addexclusion -p $FAKE_REPOS/frontend/node_modules" "$TMUTIL_LOG"
+grep -Fq "addexclusion -p $FAKE_REPOS/python/.venv311" "$TMUTIL_LOG"
+grep -Fq "addexclusion -p $FAKE_REPOS/rust/target" "$TMUTIL_LOG"
+
+HOME="$FAKE_HOME" TMUTIL_BIN="$FAKE_TMUTIL" \
+  "$SCRIPT_DIR/tm-exclude-dev-artifacts" --remove --root "$FAKE_REPOS" >/dev/null
+
+grep -Fq "removeexclusion -p $FAKE_HOME/.npm" "$TMUTIL_LOG"
+grep -Fq "removeexclusion -p $FAKE_REPOS/frontend/node_modules" "$TMUTIL_LOG"
+
+echo 'tm-exclude-dev-artifacts tests: ok'

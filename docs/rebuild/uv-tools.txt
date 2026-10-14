@@ -1,0 +1,8 @@
+# uv 管理的 Python 运行时
+uv python install 3.10 3.11 3.12 3.13
+
+# 全局 CLI；显式 Python 约束来自当前 uv receipt
+uv tool install --python 3.12 browser-act-cli==1.0.6
+uv tool install httpx==0.28.1
+uv tool install --python 3.13 kimi-cli==1.48.0
+uv tool install llm==0.31.1

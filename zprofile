@@ -1,3 +1,7 @@
+# The following lines were added by Docker Desktop to add commands to your PATH.
+export PATH="$PATH:$HOME/.docker/bin"
+# End of Docker Desktop section.
+
 # for mactex
 eval $(/usr/libexec/path_helper -s)
 
@@ -42,10 +46,11 @@ fi
 
 # Prefer Homebrew Ruby for login shells as well
 export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
-export GEM_HOME="${GEM_HOME:-/opt/homebrew/lib/ruby/gems/$(/opt/homebrew/opt/ruby/bin/ruby -e 'print RbConfig::CONFIG["ruby_version"]') }"
+export GEM_HOME="${GEM_HOME:-/opt/homebrew/lib/ruby/gems/$(/opt/homebrew/opt/ruby/bin/ruby -e 'print RbConfig::CONFIG["ruby_version"]')}"
+# 防止历史环境里残留的尾随空格污染 PATH（如 "...gems/4.x.x /bin"）
+GEM_HOME="${GEM_HOME%"${GEM_HOME##*[![:space:]]}"}"
 export PATH="$GEM_HOME/bin:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
-export PATH="$HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH"
 
 # PATH de-dup and prune for login shells
 if [ -n "$PATH" ]; then

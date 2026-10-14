@@ -2,6 +2,7 @@
 
 # 非 login 的交互式 zsh 也需要尽早看见 Homebrew 可执行文件，方便初始化插件。
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+export PATH="/opt/homebrew/opt/imagemagick-full/bin:$PATH"
 
 if [ -d /opt/homebrew/share/zsh/site-functions ]; then
   fpath=(/opt/homebrew/share/zsh/site-functions $fpath)
@@ -51,11 +52,14 @@ fi
 bindkey ' ' magic-space
 bindkey "^A" vi-beginning-of-line
 bindkey "^E" vi-end-of-line
+bindkey -M viins "^K" kill-line
 
 # Prefer Homebrew Ruby over system Ruby
 export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
 # Add user-installed gem executables to PATH for Homebrew Ruby
-export GEM_HOME="${GEM_HOME:-/opt/homebrew/lib/ruby/gems/$(/opt/homebrew/opt/ruby/bin/ruby -e 'print RbConfig::CONFIG["ruby_version"]') }"
+export GEM_HOME="${GEM_HOME:-/opt/homebrew/lib/ruby/gems/$(/opt/homebrew/opt/ruby/bin/ruby -e 'print RbConfig::CONFIG["ruby_version"]')}"
+# 防止历史环境里残留的尾随空格污染 PATH（如 "...gems/4.x.x /bin"）
+GEM_HOME="${GEM_HOME%"${GEM_HOME##*[![:space:]]}"}"
 export PATH="$GEM_HOME/bin:$PATH"
 # Use user-level prefix for global npm installs
 export NPM_CONFIG_PREFIX="$HOME/.npm-global"
@@ -82,3 +86,54 @@ fi
 
 [ -r /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ] && source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 [ -r /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# bun completions
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# 31233 SOCKS5 -> 127.0.0.1:1081
+start-31233-socks5-1081() {
+  if lsof -nP -iTCP:1081 -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "socks5 already listening on 127.0.0.1:1081"
+    return 0
+  fi
+  ssh -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=2 -fN -D 127.0.0.1:1081 31233
+  if lsof -nP -iTCP:1081 -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "socks5 started on 127.0.0.1:1081"
+    return 0
+  fi
+  echo "failed to start socks5 on 127.0.0.1:1081" >&2
+  return 1
+}
+
+stop-31233-socks5-1081() {
+  local pid
+  pid=$(lsof -t -iTCP:1081 -sTCP:LISTEN 2>/dev/null || true)
+  if [ -z "$pid" ]; then
+    echo "socks5 not running on 127.0.0.1:1081"
+    return 0
+  fi
+  kill "$pid"
+  sleep 0.2
+  if lsof -nP -iTCP:1081 -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "failed to stop socks5 on 127.0.0.1:1081" >&2
+    return 1
+  fi
+  echo "socks5 stopped on 127.0.0.1:1081"
+}
+
+# pnpm
+export PNPM_HOME="$HOME/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME/bin:"*) ;;
+  *) export PATH="$PNPM_HOME/bin:$PATH" ;;
+esac
+# pnpm end
+
+# AsyncAPI CLI Autocomplete
+
+ASYNCAPI_AC_ZSH_SETUP_PATH="$HOME/Library/Caches/@asyncapi/cli/autocomplete/zsh_setup"
+test -f "$ASYNCAPI_AC_ZSH_SETUP_PATH" && source "$ASYNCAPI_AC_ZSH_SETUP_PATH"; # asyncapi autocomplete setup

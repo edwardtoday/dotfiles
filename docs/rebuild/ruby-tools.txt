@@ -1,0 +1,2 @@
+# ~/.gem 中需要主动恢复的旧全局命令行工具
+gem install video_transcoding --version 0.25.3

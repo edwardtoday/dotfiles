@@ -1,0 +1,6 @@
+name: chattts
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pynini=2.1.5

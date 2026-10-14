@@ -22,6 +22,117 @@ function screenshot.setpng() {
     killall SystemUIServer
 }
 
+# Photos 卡住时重启图库守护进程：照片数不增长、缩略图不刷新、iCloud 同步停滞
+# （典型日志：cloudphotod "Can't instantiate wrapper for <CPLEngineParameters for
+#  SystemLibrary at cloudsync.noindex>" 或 photolibraryd "Unable to reopen connection
+#  with com.apple.cloudphotod"）。photolibraryd 不响应 SIGTERM（实测正常运行时也如此），
+# 因此等待一段时间后升级为 SIGKILL，再重新打开 Photos 让云端引擎重连，并回读同步状态。
+function mac.resetphotosync() {
+  local reopen=1
+  case "${1:-}" in
+    "") ;;
+    -n|--no-open) reopen=0 ;;
+    -h|--help)
+      echo "用法: mac.resetphotosync [--no-open]"
+      echo "  重启 photolibraryd/cloudphotod/photoanalysisd，重新打开 Photos 并回读 iCloud 同步状态。"
+      echo "  --no-open  重启后不自动打开 Photos"
+      return 0 ;;
+    *)
+      echo "未知参数: $1（用 -h 查看用法）" >&2
+      return 2 ;;
+  esac
+
+  local daemons=(photolibraryd cloudphotod photoanalysisd)
+  local daemon i
+
+  # 1) 先优雅退出 Photos，避免守护进程在写库时被强杀
+  if pgrep -qx Photos; then
+    echo "→ 退出 Photos"
+    osascript -e 'tell application "Photos" to quit' >/dev/null 2>&1
+    for ((i = 0; i < 20; i++)); do
+      pgrep -qx Photos || break
+      sleep 0.5
+    done
+    if pgrep -qx Photos; then
+      echo "  Photos 未响应退出请求，强制结束" >&2
+      pkill -x Photos 2>/dev/null
+      sleep 2
+      pkill -9 -x Photos 2>/dev/null
+    fi
+  fi
+
+  # 2) 停止守护进程，SIGTERM 无效时升级为 SIGKILL
+  for daemon in "${daemons[@]}"; do
+    if pgrep -qx "$daemon"; then
+      echo "→ 停止 $daemon"
+      killall -TERM "$daemon" 2>/dev/null
+    fi
+  done
+  for ((i = 0; i < 10; i++)); do
+    if ! pgrep -qx photolibraryd && ! pgrep -qx cloudphotod; then
+      break
+    fi
+    sleep 0.5
+  done
+  for daemon in "${daemons[@]}"; do
+    if pgrep -qx "$daemon"; then
+      # photolibraryd 一直忽略 SIGTERM（不是卡死信号），只能强杀
+      echo "  $daemon 未退出，改用 SIGKILL"
+      killall -KILL "$daemon" 2>/dev/null
+    fi
+  done
+  sleep 1
+
+  # 3) 重新打开 Photos，让 launchd 拉起干净的守护进程并重连 iCloud 引擎
+  if [ "$reopen" = 1 ]; then
+    echo "→ 重新打开 Photos"
+    open -a Photos
+  fi
+
+  # 4) 系统图库路径以 group.com.apple.photolibraryd.private 为准
+  local lib
+  lib=$(plutil -extract SystemLibraryPath raw -o - \
+    "$HOME/Library/Containers/com.apple.photolibraryd/Data/Library/Preferences/group.com.apple.photolibraryd.private.plist" 2>/dev/null)
+
+  # 5) 轮询确认云端引擎已打开：cloudphotod 会持有该图库的 CPL store（比翻日志可靠）
+  # 注意 i 已在上面 local daemon i 声明过，重复声明会让 zsh 回显它的值
+  local engine_ok=0 cplstore
+  if [ -n "$lib" ]; then
+    cplstore="$lib/resources/cpl/cloudsync.noindex/storage/store.cloudphotodb"
+    for ((i = 0; i < 30; i++)); do
+      if lsof -c cloudphotod 2>/dev/null | grep -Fq "$cplstore"; then
+        engine_ok=1
+        break
+      fi
+      sleep 1
+    done
+  fi
+
+  # 6) 回读本地资产数
+  local count
+  if [ -n "$lib" ]; then
+    echo "  系统图库: $lib"
+    if [ -f "$lib/database/Photos.sqlite" ]; then
+      count=$(sqlite3 "file:$lib/database/Photos.sqlite?mode=ro" 'select count(*) from ZASSET;' 2>/dev/null)
+      [ -n "$count" ] && echo "  本地资产数: $count（后台会继续从 iCloud 增长）"
+    fi
+  fi
+
+  if [ "$engine_ok" = 1 ]; then
+    echo "✓ iCloud Photos 引擎已重新打开，同步已恢复"
+    return 0
+  fi
+
+  # 没等到引擎：区分「路径不可访问」和「只是还没开始」
+  if log show --last 5m --predicate 'process == "cloudphotod"' --info --style compact 2>/dev/null |
+    grep -q "Can't instantiate wrapper for <CPLEngineParameters for SystemLibrary"; then
+    echo "✗ SystemLibrary 云端引擎打不开：确认系统图库路径可访问（外部卷是否已挂载）" >&2
+    return 1
+  fi
+  echo "… 未确认引擎已打开；同步可能稍后才开始，可隔几分钟用 mac.resetphotosync 复查资产数"
+  return 1
+}
+
 function find.name() {
     wild=\'\*$1\*\'
     sh -c "find . -iname $wild"
@@ -628,8 +739,16 @@ mkv2mp4() {
   echo "所有任务处理完毕。"
 }
 
-# 在 ~/.codex/auth.txt 中按 name 选择 token，并写入 ~/.codex/auth.json
-# auth.txt 支持格式:
+# 在 ~/.codex/auth.toml 中按 name 选择 token，并写入 ~/.codex/auth.json。
+# 若 auth.toml 不存在，则兼容回退到旧版 ~/.codex/auth.txt。
+# 对指定账号还会同步切换 ~/.codex/config.toml 中的 provider；
+# 若 provider 发生变化，则顺带迁移 ~/.codex/state_5.sqlite 的线程索引，
+# 避免 codex resume 因 provider 过滤看不到旧 session。
+# auth.toml 格式:
+#   [accounts.name]
+#   key = "sk-..."
+#   provider = "lab" | "pp"
+# auth.txt 兼容格式:
 #   name key
 #   name=key
 #   name:key
@@ -669,33 +788,61 @@ immichljh() {
 
 codex-use() {
   local name="$1"
+  local auth_toml="${CODEX_AUTH_TOML:-$HOME/.codex/auth.toml}"
   local auth_txt="${CODEX_AUTH_TXT:-$HOME/.codex/auth.txt}"
+  local auth_source=""
   local auth_json="${CODEX_AUTH_JSON:-$HOME/.codex/auth.json}"
+  local config_toml="${CODEX_CONFIG_TOML:-$HOME/.codex/config.toml}"
+  local state_db="${CODEX_STATE_DB:-$HOME/.codex/state_5.sqlite}"
   local key=""
   local names=""
+  local provider_from_auth=""
+  local target_provider=""
+  local provider_summary=""
 
-  if [ ! -f "$auth_txt" ]; then
-    echo "错误: 未找到 $auth_txt" >&2
+  if [ -f "$auth_toml" ]; then
+    auth_source="$auth_toml"
+  elif [ -f "$auth_txt" ]; then
+    auth_source="$auth_txt"
+  else
+    echo "错误: 未找到 $auth_toml 或 $auth_txt" >&2
     return 1
   fi
 
   names=$(
-    python3 - "$auth_txt" <<'PY'
+    python3 - "$auth_source" <<'PY'
 import re
 import sys
+from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    tomllib = None
 
 path = sys.argv[1]
 pattern = re.compile(r'^([A-Za-z0-9._-]+)\s*(?:=|:|\s)\s*(\S+)\s*$')
-
 names = []
-with open(path, encoding='utf-8') as f:
-    for raw in f:
-        line = raw.strip()
-        if not line or line.startswith('#'):
-            continue
-        m = pattern.match(line)
-        if m:
-            names.append(m.group(1))
+
+file_path = Path(path)
+if file_path.suffix.lower() == ".toml":
+    if tomllib is None:
+        raise SystemExit("python3.11+ or tomli is required for auth.toml")
+    with file_path.open("rb") as f:
+        data = tomllib.load(f)
+    accounts = data.get("accounts")
+    if isinstance(accounts, dict):
+        for account_name in accounts.keys():
+            names.append(str(account_name))
+else:
+    with file_path.open(encoding='utf-8') as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith('#'):
+                continue
+            m = pattern.match(line)
+            if m:
+                names.append(m.group(1))
 
 print(' '.join(names), end='')
 PY
@@ -707,26 +854,49 @@ PY
     return 1
   fi
 
-  key=$(
-    python3 - "$auth_txt" "$name" <<'PY'
+  local key_provider
+  key_provider=$(
+    python3 - "$auth_source" "$name" <<'PY'
 import re
 import sys
+from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    tomllib = None
 
 path, target = sys.argv[1], sys.argv[2]
 pattern = re.compile(r'^([A-Za-z0-9._-]+)\s*(?:=|:|\s)\s*(\S+)\s*$')
+file_path = Path(path)
 
-with open(path, encoding='utf-8') as f:
-    for raw in f:
-        line = raw.strip()
-        if not line or line.startswith('#'):
-            continue
-        m = pattern.match(line)
-        if not m:
-            continue
-        name, key = m.group(1), m.group(2)
-        if name == target:
-            print(key, end='')
-            raise SystemExit(0)
+if file_path.suffix.lower() == ".toml":
+    if tomllib is None:
+        raise SystemExit("python3.11+ or tomli is required for auth.toml")
+    with file_path.open("rb") as f:
+        data = tomllib.load(f)
+    accounts = data.get("accounts")
+    if isinstance(accounts, dict):
+        item = accounts.get(target)
+        if isinstance(item, dict):
+            key = str(item.get("key", "")).strip()
+            provider = str(item.get("provider", "")).strip()
+            if key:
+                print(f"{key}\t{provider}", end='')
+                raise SystemExit(0)
+else:
+    with file_path.open(encoding='utf-8') as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith('#'):
+                continue
+            m = pattern.match(line)
+            if not m:
+                continue
+            name, key = m.group(1), m.group(2)
+            if name == target:
+                print(f"{key}\t", end='')
+                raise SystemExit(0)
 
 raise SystemExit(1)
 PY
@@ -735,6 +905,236 @@ PY
     [ -n "$names" ] && echo "可用 name: $names" >&2
     return 1
   }
+
+  IFS=$'\t' read -r key provider_from_auth <<EOF
+$key_provider
+EOF
+
+  if [ -n "$provider_from_auth" ]; then
+    target_provider="$provider_from_auth"
+  else
+    case "$name" in
+      lab-qingpei)
+        target_provider="lab"
+        ;;
+      team|team2|team3|lc2000|qingpei)
+        target_provider="pp"
+        ;;
+    esac
+  fi
+
+  if [ -n "$target_provider" ] && [ ! -f "$config_toml" ]; then
+    echo "错误: 未找到 $config_toml" >&2
+    return 1
+  fi
+
+  if [ -n "$target_provider" ]; then
+    provider_summary=$(
+      CODEX_TARGET_PROVIDER="$target_provider" python3 - "$config_toml" "$state_db" <<'PY'
+import json
+import os
+import re
+import sqlite3
+import stat
+import sys
+import tempfile
+from datetime import datetime
+from pathlib import Path
+
+
+def atomic_write(path: Path, content: str, mode: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def patch_rollout_provider(path: Path, target: str) -> bool:
+    file_mode = stat.S_IMODE(path.stat().st_mode)
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    updated = False
+    found_meta = False
+    try:
+        with path.open("r", encoding="utf-8") as src, os.fdopen(fd, "w", encoding="utf-8") as dst:
+            for raw in src:
+                if not found_meta:
+                    try:
+                        item = json.loads(raw)
+                    except json.JSONDecodeError:
+                        item = None
+                    if isinstance(item, dict) and item.get("type") == "session_meta":
+                        found_meta = True
+                        payload = item.get("payload")
+                        if isinstance(payload, dict) and payload.get("model_provider") != target:
+                            payload["model_provider"] = target
+                            raw = json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n"
+                            updated = True
+                dst.write(raw)
+        os.chmod(tmp, file_mode)
+        if updated:
+            os.replace(tmp, path)
+        else:
+            os.unlink(tmp)
+        return updated
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+config_path = Path(sys.argv[1]).expanduser()
+db_path = Path(sys.argv[2]).expanduser()
+target = os.environ.get("CODEX_TARGET_PROVIDER", "").strip()
+if not target:
+    raise SystemExit("empty target provider")
+
+text = config_path.read_text(encoding="utf-8")
+provider_match = re.search(r'(?m)^model_provider\s*=\s*"([^"]+)"\s*$', text)
+if not provider_match:
+    raise SystemExit(f"model_provider is missing in {config_path}")
+
+if not re.search(rf'(?m)^\[model_providers\.{re.escape(target)}\]\s*$', text):
+    raise SystemExit(f"provider '{target}' is not configured in {config_path}")
+
+current = provider_match.group(1)
+config_changed = False
+if current != target:
+    updated_text, replacements = re.subn(
+        r'(?m)^model_provider\s*=\s*"[^"]+"\s*$',
+        f'model_provider = "{target}"',
+        text,
+        count=1,
+    )
+    if replacements != 1:
+        raise SystemExit(f"failed to update model_provider in {config_path}")
+    config_changed = True
+else:
+    updated_text = text
+
+config_mode = stat.S_IMODE(config_path.stat().st_mode)
+db_note = ""
+backup_path = None
+candidate_count = 0
+updated_rows = 0
+db_has_threads = False
+rollout_paths = []
+rollout_file_count = 0
+rollout_updated = 0
+rollout_missing = 0
+
+if db_path.is_file():
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        tables = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        if "threads" not in tables:
+            db_note = f"提示: {db_path} 中没有 threads 表，跳过 session 迁移"
+        else:
+            db_has_threads = True
+            candidate_rows = conn.execute(
+                "SELECT rollout_path FROM threads WHERE model_provider != ?",
+                (target,),
+            ).fetchall()
+            candidate_count = len(candidate_rows)
+            rollout_paths = [
+                str(row["rollout_path"]).strip()
+                for row in candidate_rows
+                if row["rollout_path"]
+            ]
+            if candidate_count > 0:
+                ts = datetime.now().strftime("%Y%m%d%H%M%S")
+                backup_path = db_path.with_name(f"{db_path.name}.provider-backup.{ts}")
+                with sqlite3.connect(backup_path) as backup_conn:
+                    conn.backup(backup_conn)
+                seen_rollouts = set()
+                for rollout_raw in rollout_paths:
+                    rollout_key = rollout_raw.strip()
+                    if not rollout_key or rollout_key in seen_rollouts:
+                        continue
+                    seen_rollouts.add(rollout_key)
+                    rollout_file_count += 1
+                    rollout_path = Path(rollout_key).expanduser()
+                    if not rollout_path.is_file():
+                        rollout_missing += 1
+                        continue
+                    if patch_rollout_provider(rollout_path, target):
+                        rollout_updated += 1
+            else:
+                candidate_count = int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM threads WHERE model_provider != ?",
+                        (target,),
+                    ).fetchone()[0]
+                )
+    finally:
+        conn.close()
+else:
+    db_note = f"提示: 未找到 {db_path}，跳过 session 迁移"
+
+if config_changed:
+    atomic_write(config_path, updated_text, config_mode)
+
+try:
+    if db_has_threads and candidate_count > 0:
+        conn = sqlite3.connect(db_path)
+        try:
+            with conn:
+                updated_rows = int(
+                    conn.execute(
+                        "UPDATE threads SET model_provider = ? WHERE model_provider != ?",
+                        (target, target),
+                    ).rowcount
+                )
+        finally:
+            conn.close()
+except Exception:
+    if config_changed:
+        atomic_write(config_path, text, config_mode)
+    raise
+
+if config_changed:
+    print(f"已切换 Codex provider: {current} -> {target}")
+else:
+    print(f"Codex provider 保持为: {target}")
+if db_has_threads:
+    if candidate_count == 0:
+        print(f"session 索引已是 provider={target}，无需迁移")
+    else:
+        print(
+            f"已迁移 session 索引到 provider={target}: "
+            f"{updated_rows} 条，备份: {backup_path}"
+        )
+        if rollout_file_count > 0:
+            print(
+                f"已修复 session 源文件 provider={target}: "
+                f"{rollout_updated}/{rollout_file_count}"
+            )
+        if rollout_missing > 0:
+            print(f"提示: {rollout_missing} 个 session 源文件不存在，后续回填可能仍不完整")
+elif db_note:
+    print(db_note)
+PY
+    ) || {
+      echo "错误: 切换 provider / 迁移 session 失败" >&2
+      return 1
+    }
+  fi
 
   if ! CODEX_SELECTED_KEY="$key" python3 - "$auth_json" <<'PY'; then
 import json
@@ -767,5 +1167,7 @@ PY
   fi
 
   chmod 600 "$auth_json" 2>/dev/null
+
   echo "已切换 Codex key: $name"
+  [ -n "$provider_summary" ] && echo "$provider_summary"
 }
