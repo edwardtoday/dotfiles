@@ -111,9 +111,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "2496a58279595d3c93dd66b0b8927baf0bb32467fc29a0a7d9d4b389ef6eece5",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/2496a58279595d3c93dd66b0b8927baf0bb32467fc29a0a7d9d4b389ef6eece5.tar.gz",
-      "archive_sha256": "58eac4f41637e41ae79a4da0e3909f2016fd2e3087d530105706560aacae81c1",
+      "tree_sha256": "8ca33f8b938a42556e274e6bd093cd9c811faea544ecdd9645dc19e9d782828d",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/8ca33f8b938a42556e274e6bd093cd9c811faea544ecdd9645dc19e9d782828d.tar.gz",
+      "archive_sha256": "007ee33aa505b6d3a5609aa2d974b7b74ee813509e87bc01d2e430039feb0712",
       "name": "delivery-quality-gate",
       "runtime_path": "/Users/qingpei/.agents/skills/delivery-quality-gate",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/delivery-quality-gate",
@@ -593,9 +593,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "18a981e641f4c8277da91149d5d81cb488a1966128458eecaccb90e55791e632",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/18a981e641f4c8277da91149d5d81cb488a1966128458eecaccb90e55791e632.tar.gz",
-      "archive_sha256": "58ab29c4e0af9d4df061b2809b3ca8f6599b3d7a3fa15422645539f7c4b15111",
+      "tree_sha256": "8f6fb65cfff955ca1c80248fd4bd0b21c16448fa010a81fa8a48ab5bd88b78ec",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/8f6fb65cfff955ca1c80248fd4bd0b21c16448fa010a81fa8a48ab5bd88b78ec.tar.gz",
+      "archive_sha256": "1d9dc25528bb277c5f8948875f79887de49c8ee990bf21e88d58f478250eddc4",
       "name": "research",
       "runtime_path": "/Users/qingpei/.agents/skills/research",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/research",
@@ -1083,5 +1083,5 @@
       "dependencies": []
     }
   ],
-  "updated_at": "2026-10-14T03:34:31Z"
+  "updated_at": "2026-10-14T04:10:35Z"
 }
