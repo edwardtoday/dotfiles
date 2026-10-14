@@ -19,9 +19,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "ea976ea8803dfcfecd2e7b1d74e8dbeb390a220c072a60baad96e15c1a65265d",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/ea976ea8803dfcfecd2e7b1d74e8dbeb390a220c072a60baad96e15c1a65265d.tar.gz",
-      "archive_sha256": "2c32dd036ac224bda8f6340f53658fe6fb572c4c8f204ed9096f69c520e257fc",
+      "tree_sha256": "0f1d8e1dbf52d39674f6e01aabd9cd377d1bb59b0ef1fb432d48733915d63695",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/0f1d8e1dbf52d39674f6e01aabd9cd377d1bb59b0ef1fb432d48733915d63695.tar.gz",
+      "archive_sha256": "2c21a1a8f3aa9075a5504364e7785b3b68f4dc9dd961e353ab24931302ed3d96",
       "name": "advance-my-gitlab-mrs",
       "runtime_path": "/Users/qingpei/.agents/skills/advance-my-gitlab-mrs",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/advance-my-gitlab-mrs",
@@ -187,9 +187,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "17dd39f108e973bc7205d3418fc297137e3b03e709c80385a1cfb2fd31b51697",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/17dd39f108e973bc7205d3418fc297137e3b03e709c80385a1cfb2fd31b51697.tar.gz",
-      "archive_sha256": "847d6404485d686c4b1cb7f312b81af1e1e451a9b75e29939fb3b6cce4e9b088",
+      "tree_sha256": "54c833b6fa3aec0bbdc0e979669a9ec30cda9f166c98c56cdf9b52d744e7d415",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/54c833b6fa3aec0bbdc0e979669a9ec30cda9f166c98c56cdf9b52d744e7d415.tar.gz",
+      "archive_sha256": "ec40e56f63c7ef8ba1a3f42273bcd98ed221f3d767703e71c03f04ce259d23bf",
       "name": "generate-images-via-providers",
       "runtime_path": "/Users/qingpei/.agents/skills/generate-images-via-providers",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/generate-images-via-providers",
@@ -202,9 +202,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "21cf293f16fe6b85bb6821c0fbd33bef154a03c694a54f93423284281f223c60",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/21cf293f16fe6b85bb6821c0fbd33bef154a03c694a54f93423284281f223c60.tar.gz",
-      "archive_sha256": "fb81a6cb82bc4960fde08b9a7ad8d01205ae3f9dc8e45d147460d1beb9997108",
+      "tree_sha256": "cb3c2b30cb29809effe867d0346f6ba120094cee6d34026b442d95bf54c5e706",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/cb3c2b30cb29809effe867d0346f6ba120094cee6d34026b442d95bf54c5e706.tar.gz",
+      "archive_sha256": "8c07ddcfd398293fd57439c3e2ae1d3c7fca3ba44aab6744c88c2b706a648a10",
       "name": "gitlab-ci-pipeline-optimization",
       "runtime_path": "/Users/qingpei/.agents/skills/gitlab-ci-pipeline-optimization",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/gitlab-ci-pipeline-optimization",
@@ -217,9 +217,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "62780982a1972104f846d141ace54b76b31582ff2c6d5ef5396640b5aa5aed97",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/62780982a1972104f846d141ace54b76b31582ff2c6d5ef5396640b5aa5aed97.tar.gz",
-      "archive_sha256": "41d9d4f7f965355366291af5bd63b6e1785875d331ae9e057655361a4a80f795",
+      "tree_sha256": "e3200c9c151f7921683963535c7db25643d1ee2a5c053a09e31f04b92a5670ce",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/e3200c9c151f7921683963535c7db25643d1ee2a5c053a09e31f04b92a5670ce.tar.gz",
+      "archive_sha256": "59e1e43b9f612dc00825b6e6651710020d808b1e94a534a0f53cd3823cd81084",
       "name": "gitlab-pipeline-failure-triage",
       "runtime_path": "/Users/qingpei/.agents/skills/gitlab-pipeline-failure-triage",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/gitlab-pipeline-failure-triage",
@@ -232,9 +232,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "5a6b0e10734b49ada37b8618b42914974cb46183933536a83656a8cf65c7ea74",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/5a6b0e10734b49ada37b8618b42914974cb46183933536a83656a8cf65c7ea74.tar.gz",
-      "archive_sha256": "8dbc706aecfe91496d5c26a325e016103406f2d637ac09b61a0cc50760ed05e2",
+      "tree_sha256": "46300b1b05d3388517bee5d9635384ffd9ec258b8479bc45439efee302c31854",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/46300b1b05d3388517bee5d9635384ffd9ec258b8479bc45439efee302c31854.tar.gz",
+      "archive_sha256": "42227f3c743b5f189c1fbc0ed5d5c42a809d8867952d09e5d909669226218b9e",
       "name": "gitlab-wiki-export",
       "runtime_path": "/Users/qingpei/.agents/skills/gitlab-wiki-export",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/gitlab-wiki-export",
@@ -428,9 +428,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "372d0973820a40314c5d3d03863a1694cc1c7821d7f5edff9feccdfe4ec123a7",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/372d0973820a40314c5d3d03863a1694cc1c7821d7f5edff9feccdfe4ec123a7.tar.gz",
-      "archive_sha256": "af118692ff4544cec6a7ece2b5134a90665f8e77690494191f65d4fdc87852aa",
+      "tree_sha256": "920ccb82d35d4d02917d71e83989aa7370bea0d5a7bb226ebcaf1340cba75339",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/920ccb82d35d4d02917d71e83989aa7370bea0d5a7bb226ebcaf1340cba75339.tar.gz",
+      "archive_sha256": "8425fec981fc77944ae64291e907e9e09796e2185ba057d004b58eddaa62e535",
       "name": "obsidian-meeting-filename-normalizer",
       "runtime_path": "/Users/qingpei/.agents/skills/obsidian-meeting-filename-normalizer",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/obsidian-meeting-filename-normalizer",
@@ -469,9 +469,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "03b71714c248aa02978c1731ec8c15b4916e3c8732e7e45a8bc8a7fffddeb32f",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/03b71714c248aa02978c1731ec8c15b4916e3c8732e7e45a8bc8a7fffddeb32f.tar.gz",
-      "archive_sha256": "b40ca0903ce07a54d002be31a5b3b325b6de3c4f720fd9d78faec71303f14658",
+      "tree_sha256": "c157f632b1c7a47a231187ee901a81a767ae1f83fa6767e300dccb3d07129a4f",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/c157f632b1c7a47a231187ee901a81a767ae1f83fa6767e300dccb3d07129a4f.tar.gz",
+      "archive_sha256": "ffaf1bef42b3e27d7a5659d56fbaf706c53d2958b0fe5ed92b4cd71cd186c0c4",
       "name": "optimize-end-to-end-systems",
       "runtime_path": "/Users/qingpei/.agents/skills/optimize-end-to-end-systems",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/optimize-end-to-end-systems",
@@ -624,9 +624,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "48cc3cb50c9c79f8f63ba365ec07d904ed053b05f3484e34ea12a229ae0c0880",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/48cc3cb50c9c79f8f63ba365ec07d904ed053b05f3484e34ea12a229ae0c0880.tar.gz",
-      "archive_sha256": "db74da49a756d79728b8f44c0916bf366a0a3a9be611d5b304f07f7b99ee641f",
+      "tree_sha256": "218b42986e8de1f3e85ba0f8125ee4cf4cc869d0813da3f678e410c78640d0c4",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/218b42986e8de1f3e85ba0f8125ee4cf4cc869d0813da3f678e410c78640d0c4.tar.gz",
+      "archive_sha256": "adbc532549455ee7d64b449b99bac713bfe5b321ce2cf6ca1c4de8d47c10b1ec",
       "name": "run-resumable-long-tasks",
       "runtime_path": "/Users/qingpei/.agents/skills/run-resumable-long-tasks",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/run-resumable-long-tasks",
@@ -788,9 +788,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "2d8e2340d156d57b9790e8da331b918a0404966eef050f847a0c07c1c30005ab",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/2d8e2340d156d57b9790e8da331b918a0404966eef050f847a0c07c1c30005ab.tar.gz",
-      "archive_sha256": "94340f8b7f32e1d1f1c2a4c2b6d5877a864dbbae61bc946ca22613ce7eba4404",
+      "tree_sha256": "32f36a791fa75915b3660517ccce59775a8bba1248f5794062264ace502eb871",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/32f36a791fa75915b3660517ccce59775a8bba1248f5794062264ace502eb871.tar.gz",
+      "archive_sha256": "15a2a3dfb2393314109049a5b2e88a4970eb037ee72c61b91846ac5e4e8d28b0",
       "name": "use-y9000-pdf-ocr",
       "runtime_path": "/Users/qingpei/.agents/skills/use-y9000-pdf-ocr",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/use-y9000-pdf-ocr",
@@ -803,9 +803,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "db25c727803aaca9c980aa6bebb19fad9a0e40523f376db450c8a5a92b051751",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/db25c727803aaca9c980aa6bebb19fad9a0e40523f376db450c8a5a92b051751.tar.gz",
-      "archive_sha256": "c51fb3f79f3317da2d46635e2208d2a81d5f1ef6a5afeb30ab98768f48b0c33a",
+      "tree_sha256": "9f592e0682b573debf053b12c6c000e57afd890d7398f2f487facae93cbf5144",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/9f592e0682b573debf053b12c6c000e57afd890d7398f2f487facae93cbf5144.tar.gz",
+      "archive_sha256": "182cfaf24ef14f800854ca05cefbaff3ee730b0243935c23a87f5a3b61d582b8",
       "name": "video-production-orchestrator",
       "runtime_path": "/Users/qingpei/.agents/skills/video-production-orchestrator",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/video-production-orchestrator",
@@ -818,9 +818,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "6423d6b45c2227c173542c2b2af2894834771f34c85a7f33573fbf44736270c1",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/6423d6b45c2227c173542c2b2af2894834771f34c85a7f33573fbf44736270c1.tar.gz",
-      "archive_sha256": "159009e99991cba8415400590a3ba40416ced463bbb51745e1c71c8b69302e91",
+      "tree_sha256": "f2071da679eb47d62049106786060ccdbdfdfbd87ac748cd7b88369d7c466b14",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/f2071da679eb47d62049106786060ccdbdfdfbd87ac748cd7b88369d7c466b14.tar.gz",
+      "archive_sha256": "0493c940a355020d555d3ae869fceb6ffa19812a5c6bc988dd3cb27ca5efc7ab",
       "name": "video-to-obsidian-note",
       "runtime_path": "/Users/qingpei/.agents/skills/video-to-obsidian-note",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/video-to-obsidian-note",
@@ -864,9 +864,9 @@
       "dependencies": []
     },
     {
-      "tree_sha256": "c172247289dd417b4552ae993bb76760d1aced071358e90bbc1d71e2b2b3ab25",
-      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/c172247289dd417b4552ae993bb76760d1aced071358e90bbc1d71e2b2b3ab25.tar.gz",
-      "archive_sha256": "d4d644342cbd3f3afce9f24d04b6f83f028fb7554addbd3d31f3c7746bc5183f",
+      "tree_sha256": "57b65f42739d86a0093d4681022a024a74bc1693be88dafb38a1d5a61e7a8ed4",
+      "archive": "/Users/qingpei/.local/share/agent-skills/snapshots/57b65f42739d86a0093d4681022a024a74bc1693be88dafb38a1d5a61e7a8ed4.tar.gz",
+      "archive_sha256": "cada357d794e7e5f857ff2659e7798d0b85c8b76f6ac23242dd89db8c55e8597",
       "name": "web-to-obsidian-note",
       "runtime_path": "/Users/qingpei/.agents/skills/web-to-obsidian-note",
       "source_path": "/Users/qingpei/.local/share/agent-skills/personal/skills/web-to-obsidian-note",
@@ -1083,5 +1083,5 @@
       "dependencies": []
     }
   ],
-  "updated_at": "2026-10-14T04:10:35Z"
+  "updated_at": "2026-10-14T04:34:19Z"
 }
