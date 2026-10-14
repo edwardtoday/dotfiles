@@ -1,0 +1,722 @@
+#!/usr/bin/env python3
+"""Capture Clash TUN failures and recover with a bounded fail-open policy."""
+
+from __future__ import annotations
+
+import argparse
+import concurrent.futures
+import copy
+import dataclasses
+import datetime as dt
+import enum
+import fcntl
+import hashlib
+import http.client
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import time
+from typing import Any
+
+
+SOCKET_PATH = Path(
+    os.environ.get("CLASH_TUN_WATCHDOG_SOCKET", "/tmp/verge/verge-mihomo.sock")
+)
+ROOT = Path(
+    os.environ.get(
+        "CLASH_TUN_WATCHDOG_ROOT", f"/tmp/clash-tun-watchdog-{os.getuid()}"
+    )
+)
+STATE_PATH = ROOT / "state.json"
+LOCK_PATH = ROOT / "run.lock"
+EVENTS_PATH = ROOT / "events"
+LOG_PATH = ROOT / "watchdog.jsonl"
+BOOT_PATH = ROOT / "boot-id"
+
+FAILURE_THRESHOLD = 3
+AC_PROBE_INTERVAL = 180
+BATTERY_PROBE_INTERVAL = 300
+RETRY_BASE_SECONDS = 60
+RETRY_MAX_SECONDS = 600
+
+PUBLIC_TARGETS = (
+    ("apple", "https://captive.apple.com/hotspot-detect.html"),
+    ("cloudflare", "https://www.cloudflare.com/cdn-cgi/trace"),
+)
+GITLAB_TARGET = ("gitlab", "https://git.sansi.net:6101/users/sign_in")
+
+
+class Action(enum.Enum):
+    NONE = "none"
+    FAIL_OPEN = "fail_open"
+    TRY_ENABLE = "try_enable"
+
+
+@dataclasses.dataclass(frozen=True)
+class ProbeResult:
+    name: str
+    exit_code: int
+    http_code: int
+    error: str
+
+    @property
+    def healthy(self) -> bool:
+        return self.exit_code == 0 and 200 <= self.http_code < 500
+
+
+@dataclasses.dataclass(frozen=True)
+class ProbeSummary:
+    public_results: tuple[ProbeResult, ...]
+    gitlab: ProbeResult
+
+    @property
+    def public_healthy(self) -> bool:
+        return any(result.healthy for result in self.public_results)
+
+    def trigger_reason(self) -> str | None:
+        if not self.public_healthy:
+            return "public_unreachable"
+        if self.gitlab.exit_code == 60:
+            return "gitlab_tls"
+        return None
+
+    def recovery_ready(self, reason: str | None) -> bool:
+        if not self.public_healthy:
+            return False
+        if reason == "gitlab_tls":
+            return self.gitlab.healthy
+        return True
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "public": [dataclasses.asdict(result) for result in self.public_results],
+            "gitlab": dataclasses.asdict(self.gitlab),
+            "trigger_reason": self.trigger_reason(),
+        }
+
+
+class UnixHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, socket_path: Path, timeout: float = 3.0):
+        super().__init__("localhost", timeout=timeout)
+        self.socket_path = socket_path
+
+    def connect(self) -> None:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(self.timeout)
+        sock.connect(str(self.socket_path))
+        self.sock = sock
+
+
+class MihomoAPI:
+    def __init__(self, socket_path: Path):
+        self.socket_path = socket_path
+
+    def request(
+        self, method: str, path: str, payload: dict[str, Any] | None = None
+    ) -> Any:
+        body = None if payload is None else json.dumps(payload).encode("utf-8")
+        headers = {} if body is None else {"Content-Type": "application/json"}
+        connection = UnixHTTPConnection(self.socket_path)
+        try:
+            connection.request(method, path, body=body, headers=headers)
+            response = connection.getresponse()
+            raw = response.read()
+            if response.status < 200 or response.status >= 300:
+                raise RuntimeError(f"mihomo API {method} {path}: HTTP {response.status}")
+            if not raw:
+                return None
+            return json.loads(raw)
+        finally:
+            connection.close()
+
+    def configs(self) -> dict[str, Any]:
+        result = self.request("GET", "/configs")
+        if not isinstance(result, dict):
+            raise RuntimeError("mihomo API returned an invalid config object")
+        return result
+
+    def version(self) -> dict[str, Any]:
+        result = self.request("GET", "/version")
+        return result if isinstance(result, dict) else {}
+
+    def set_tun_enabled(self, current_tun: dict[str, Any], enabled: bool) -> None:
+        tun = {
+            key: copy.deepcopy(value)
+            for key, value in current_tun.items()
+            if key not in {"file-descriptor", "recvmsgx"}
+        }
+        tun["enable"] = enabled
+        self.request("PATCH", "/configs", {"tun": tun})
+        observed = self.configs().get("tun", {}).get("enable")
+        if observed is not enabled:
+            raise RuntimeError(
+                f"mihomo did not apply tun.enable={str(enabled).lower()}"
+            )
+
+
+def utc_now() -> str:
+    return dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat()
+
+
+def default_state() -> dict[str, Any]:
+    return {
+        "version": 1,
+        "managed_fail_open": False,
+        "failure_reason": None,
+        "consecutive_failures": 0,
+        "retry_count": 0,
+        "next_retry_at": 0,
+        "last_action_at": 0,
+        "last_probe_at": 0,
+        "network_fingerprint": None,
+    }
+
+
+def next_action(
+    *,
+    tun_enabled: bool,
+    trigger_reason: str | None,
+    direct_ready: bool,
+    state: dict[str, Any],
+    now: int,
+) -> tuple[Action, dict[str, Any]]:
+    updated = copy.deepcopy(state)
+    if tun_enabled:
+        if trigger_reason is None:
+            updated["consecutive_failures"] = 0
+            updated["failure_reason"] = None
+            updated["managed_fail_open"] = False
+            updated["retry_count"] = 0
+            updated["next_retry_at"] = 0
+            return Action.NONE, updated
+
+        if updated.get("failure_reason") != trigger_reason:
+            updated["consecutive_failures"] = 0
+        updated["failure_reason"] = trigger_reason
+        updated["consecutive_failures"] = int(
+            updated.get("consecutive_failures", 0)
+        ) + 1
+        if updated["consecutive_failures"] >= FAILURE_THRESHOLD:
+            return Action.FAIL_OPEN, updated
+        return Action.NONE, updated
+
+    updated["consecutive_failures"] = 0
+    if not updated.get("managed_fail_open"):
+        updated["failure_reason"] = None
+        return Action.NONE, updated
+    if now < int(updated.get("next_retry_at", 0)):
+        return Action.NONE, updated
+    if direct_ready:
+        return Action.TRY_ENABLE, updated
+    return Action.NONE, updated
+
+
+def ensure_root() -> None:
+    os.umask(0o077)
+    if ROOT.exists() and ROOT.is_symlink():
+        raise RuntimeError(f"refusing symlink watchdog root: {ROOT}")
+    current_boot = run_command(["/usr/sbin/sysctl", "-n", "kern.boottime"]).strip()
+    if ROOT.exists() and BOOT_PATH.exists():
+        try:
+            recorded_boot = BOOT_PATH.read_text(encoding="utf-8").strip()
+        except OSError:
+            recorded_boot = current_boot
+        stat = ROOT.stat()
+        if recorded_boot != current_boot:
+            if stat.st_uid != os.getuid() or not ROOT.is_dir():
+                raise RuntimeError(f"refusing unowned watchdog root: {ROOT}")
+            shutil.rmtree(ROOT)
+    ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
+    EVENTS_PATH.mkdir(mode=0o700, exist_ok=True)
+    BOOT_PATH.write_text(current_boot + "\n", encoding="utf-8")
+    os.chmod(BOOT_PATH, 0o600)
+
+
+def read_state() -> dict[str, Any]:
+    state = default_state()
+    try:
+        loaded = json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return state
+    if isinstance(loaded, dict):
+        state.update(loaded)
+    return state
+
+
+def write_state(state: dict[str, Any]) -> None:
+    temporary = STATE_PATH.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps(state, ensure_ascii=True, indent=2) + "\n", encoding="utf-8"
+    )
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, STATE_PATH)
+
+
+def log_event(event: str, **fields: Any) -> None:
+    record = {"timestamp": utc_now(), "event": event, **fields}
+    with LOG_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=True, sort_keys=True) + "\n")
+
+
+def run_command(arguments: list[str], timeout: float = 5.0) -> str:
+    try:
+        result = subprocess.run(
+            arguments,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"command failed: {exc}\n"
+    output = result.stdout
+    if result.stderr:
+        output += f"\n[stderr]\n{result.stderr}"
+    return output
+
+
+def network_fingerprint() -> tuple[str, dict[str, str]]:
+    facts = {
+        "default_route": run_command(["/sbin/route", "-n", "get", "default"]),
+        "network": run_command(["/usr/sbin/scutil", "--nwi"]),
+        "dns": run_command(["/usr/sbin/scutil", "--dns"]),
+    }
+    digest = hashlib.sha256(
+        "\n".join(facts.values()).encode("utf-8", errors="replace")
+    ).hexdigest()
+    return digest, facts
+
+
+def on_battery() -> bool:
+    output = run_command(["/usr/bin/pmset", "-g", "batt"], timeout=3)
+    return "Battery Power" in output
+
+
+def curl_probe(name: str, url: str) -> ProbeResult:
+    curl = shutil.which("curl") or "/usr/bin/curl"
+    try:
+        result = subprocess.run(
+            [
+                curl,
+                "--silent",
+                "--show-error",
+                "--location",
+                "--output",
+                "/dev/null",
+                "--connect-timeout",
+                "4",
+                "--max-time",
+                "7",
+                "--write-out",
+                "%{http_code}",
+                url,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=9,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return ProbeResult(name, 124, 0, str(exc)[:500])
+    try:
+        http_code = int(result.stdout.strip() or "0")
+    except ValueError:
+        http_code = 0
+    return ProbeResult(name, result.returncode, http_code, result.stderr.strip()[:500])
+
+
+def probe_connectivity() -> ProbeSummary:
+    targets = (*PUBLIC_TARGETS, GITLAB_TARGET)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(targets)) as executor:
+        futures = {
+            name: executor.submit(curl_probe, name, url) for name, url in targets
+        }
+        results = {name: future.result() for name, future in futures.items()}
+    return ProbeSummary(
+        public_results=tuple(results[name] for name, _ in PUBLIC_TARGETS),
+        gitlab=results[GITLAB_TARGET[0]],
+    )
+
+
+def tls_leaf_metadata() -> str:
+    openssl = shutil.which("openssl")
+    if not openssl:
+        return "openssl unavailable\n"
+    try:
+        handshake = subprocess.run(
+            [
+                openssl,
+                "s_client",
+                "-connect",
+                "git.sansi.net:6101",
+                "-servername",
+                "git.sansi.net",
+                "-showcerts",
+            ],
+            input="",
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=8,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"TLS metadata failed: {exc}\n"
+    match = re.search(
+        r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----",
+        handshake.stdout,
+        flags=re.DOTALL,
+    )
+    if not match:
+        return f"no leaf certificate; s_client exit={handshake.returncode}\n"
+    try:
+        metadata = subprocess.run(
+            [
+                openssl,
+                "x509",
+                "-noout",
+                "-subject",
+                "-issuer",
+                "-serial",
+                "-fingerprint",
+                "-sha256",
+                "-dates",
+            ],
+            input=match.group(0),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"leaf parsing failed: {exc}\n"
+    return metadata.stdout + metadata.stderr
+
+
+def filtered_clash_log() -> str:
+    path = Path(
+        os.path.expanduser(
+            "~/Library/Application Support/io.github.clash-verge-rev."
+            "clash-verge-rev/logs/latest.log"
+        )
+    )
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as exc:
+        return f"log unavailable: {exc}\n"
+    pattern = re.compile(
+        r"TUN|default network interface|system dns|certificate|git\.sansi\.net",
+        re.IGNORECASE,
+    )
+    return "\n".join(line for line in lines[-1000:] if pattern.search(line)) + "\n"
+
+
+def safe_mihomo_snapshot(api: MihomoAPI) -> dict[str, Any]:
+    try:
+        configs = api.configs()
+        version = api.version()
+        return {"version": version, "mode": configs.get("mode"), "tun": configs.get("tun")}
+    except Exception as exc:  # The snapshot must not prevent recovery.
+        return {"error": str(exc)}
+
+
+def capture_snapshot(
+    api: MihomoAPI,
+    event_kind: str,
+    phase: str,
+    probe: ProbeSummary | None,
+    event_dir: Path | None = None,
+) -> Path:
+    if event_dir is None:
+        timestamp = dt.datetime.now().strftime("%Y%m%dT%H%M%S")
+        event_dir = EVENTS_PATH / f"{timestamp}-{event_kind}"
+    phase_dir = event_dir / phase
+    phase_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+    commands = {
+        "default-route.txt": ["/sbin/route", "-n", "get", "default"],
+        "gitlab-route.txt": ["/sbin/route", "-n", "get", "git.sansi.net"],
+        "network.txt": ["/usr/sbin/scutil", "--nwi"],
+        "dns.txt": ["/usr/sbin/scutil", "--dns"],
+        "interfaces.txt": ["/sbin/ifconfig"],
+        "power.txt": ["/usr/bin/pmset", "-g", "batt"],
+    }
+    for filename, arguments in commands.items():
+        (phase_dir / filename).write_text(
+            run_command(arguments), encoding="utf-8", errors="replace"
+        )
+    (phase_dir / "mihomo.json").write_text(
+        json.dumps(safe_mihomo_snapshot(api), ensure_ascii=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (phase_dir / "tls-gitlab.txt").write_text(
+        tls_leaf_metadata(), encoding="utf-8", errors="replace"
+    )
+    (phase_dir / "clash-errors.txt").write_text(
+        filtered_clash_log(), encoding="utf-8", errors="replace"
+    )
+    if probe is not None:
+        (phase_dir / "probe.json").write_text(
+            json.dumps(probe.as_dict(), ensure_ascii=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    return event_dir
+
+
+def probe_due(state: dict[str, Any], fingerprint: str, now: int) -> tuple[bool, str]:
+    if state.get("network_fingerprint") != fingerprint:
+        return True, "network_changed"
+    if state.get("managed_fail_open"):
+        return True, "managed_fail_open"
+    if int(state.get("consecutive_failures", 0)) > 0:
+        return True, "confirm_failure"
+    interval = BATTERY_PROBE_INTERVAL if on_battery() else AC_PROBE_INTERVAL
+    if now - int(state.get("last_probe_at", 0)) >= interval:
+        return True, "periodic"
+    return False, "not_due"
+
+
+def retry_delay(retry_count: int) -> int:
+    return min(RETRY_BASE_SECONDS * (2 ** max(0, retry_count - 1)), RETRY_MAX_SECONDS)
+
+
+def run_watchdog(*, force_probe: bool, dry_run: bool) -> int:
+    ensure_root()
+    lock_handle = LOCK_PATH.open("a+")
+    try:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock_handle.close()
+        return 0
+
+    try:
+        api = MihomoAPI(SOCKET_PATH)
+        try:
+            configs = api.configs()
+        except Exception as exc:
+            log_event("mihomo_unavailable", error=str(exc))
+            return 0
+
+        tun = configs.get("tun")
+        if not isinstance(tun, dict) or not isinstance(tun.get("enable"), bool):
+            log_event("invalid_tun_config")
+            return 1
+
+        state = read_state()
+        now = int(time.time())
+        fingerprint, _ = network_fingerprint()
+        due, due_reason = probe_due(state, fingerprint, now)
+        if force_probe:
+            due, due_reason = True, "forced"
+        previous_fingerprint = state.get("network_fingerprint")
+        state["network_fingerprint"] = fingerprint
+        if not due:
+            write_state(state)
+            return 0
+
+        if due_reason == "network_changed" and previous_fingerprint is not None:
+            time.sleep(5)
+        probe = probe_connectivity()
+        trigger = probe.trigger_reason()
+        state["last_probe_at"] = now
+        action, state = next_action(
+            tun_enabled=tun["enable"],
+            trigger_reason=trigger,
+            direct_ready=probe.recovery_ready(state.get("failure_reason")),
+            state=state,
+            now=now,
+        )
+        log_event(
+            "probe",
+            due_reason=due_reason,
+            tun_enabled=tun["enable"],
+            action=action.value,
+            probe=probe.as_dict(),
+        )
+
+        while (
+            tun["enable"]
+            and trigger is not None
+            and action is Action.NONE
+            and int(state.get("consecutive_failures", 0)) < FAILURE_THRESHOLD
+        ):
+            time.sleep(5)
+            probe = probe_connectivity()
+            trigger = probe.trigger_reason()
+            action, state = next_action(
+                tun_enabled=True,
+                trigger_reason=trigger,
+                direct_ready=False,
+                state=state,
+                now=int(time.time()),
+            )
+            state["last_probe_at"] = int(time.time())
+            log_event(
+                "confirmation_probe",
+                tun_enabled=True,
+                action=action.value,
+                probe=probe.as_dict(),
+            )
+
+        if action is Action.NONE:
+            write_state(state)
+            return 0
+        if dry_run:
+            event_dir = capture_snapshot(api, "dry-run", "before", probe)
+            log_event("dry_run_action", action=action.value, evidence=str(event_dir))
+            write_state(state)
+            return 0
+
+        if action is Action.FAIL_OPEN:
+            event_dir = capture_snapshot(api, trigger or "failure", "before", probe)
+            try:
+                api.set_tun_enabled(tun, False)
+            except Exception as exc:
+                log_event("fail_open_failed", error=str(exc), evidence=str(event_dir))
+                write_state(state)
+                return 1
+            state.update(
+                {
+                    "managed_fail_open": True,
+                    "failure_reason": trigger,
+                    "consecutive_failures": 0,
+                    "retry_count": 0,
+                    "last_action_at": int(time.time()),
+                    "next_retry_at": int(time.time()) + RETRY_BASE_SECONDS,
+                    "last_probe_at": int(time.time()),
+                }
+            )
+            write_state(state)
+            time.sleep(2)
+            direct_probe = probe_connectivity()
+            capture_snapshot(api, trigger or "failure", "after-fail-open", direct_probe, event_dir)
+            log_event(
+                "failed_open",
+                reason=trigger,
+                evidence=str(event_dir),
+                direct_probe=direct_probe.as_dict(),
+            )
+            write_state(state)
+            return 0
+
+        event_dir = capture_snapshot(api, "retry-enable", "before", probe)
+        try:
+            api.set_tun_enabled(tun, True)
+            time.sleep(3)
+            enabled_probe = probe_connectivity()
+            capture_snapshot(api, "retry-enable", "after-enable", enabled_probe, event_dir)
+        except Exception as exc:
+            log_event("enable_attempt_failed", error=str(exc), evidence=str(event_dir))
+            enabled_probe = None
+
+        previous_reason = state.get("failure_reason")
+        if enabled_probe is not None and enabled_probe.recovery_ready(previous_reason):
+            state.update(
+                {
+                    "managed_fail_open": False,
+                    "failure_reason": None,
+                    "consecutive_failures": 0,
+                    "retry_count": 0,
+                    "next_retry_at": 0,
+                    "last_action_at": int(time.time()),
+                    "last_probe_at": int(time.time()),
+                }
+            )
+            log_event("tun_reenabled", evidence=str(event_dir), probe=enabled_probe.as_dict())
+            write_state(state)
+            return 0
+
+        try:
+            current_tun = api.configs().get("tun", tun)
+            api.set_tun_enabled(current_tun, False)
+        except Exception as exc:
+            log_event("restore_fail_open_failed", error=str(exc), evidence=str(event_dir))
+            write_state(state)
+            return 1
+        retry_count = int(state.get("retry_count", 0)) + 1
+        state.update(
+            {
+                "managed_fail_open": True,
+                "retry_count": retry_count,
+                "next_retry_at": int(time.time()) + retry_delay(retry_count),
+                "last_action_at": int(time.time()),
+                "last_probe_at": int(time.time()),
+            }
+        )
+        capture_snapshot(api, "retry-enable", "restored-fail-open", enabled_probe, event_dir)
+        log_event(
+            "tun_retry_rejected",
+            evidence=str(event_dir),
+            retry_count=retry_count,
+            next_retry_at=state["next_retry_at"],
+        )
+        write_state(state)
+        return 0
+    finally:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+        lock_handle.close()
+
+
+def status() -> int:
+    ensure_root()
+    api = MihomoAPI(SOCKET_PATH)
+    try:
+        configs = api.configs()
+        tun_enabled = configs.get("tun", {}).get("enable")
+        api_error = None
+    except Exception as exc:
+        tun_enabled = None
+        api_error = str(exc)
+    print(
+        json.dumps(
+            {
+                "root": str(ROOT),
+                "socket": str(SOCKET_PATH),
+                "tun_enabled": tun_enabled,
+                "api_error": api_error,
+                "state": read_state(),
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+    )
+    return 0
+
+
+def manual_capture() -> int:
+    ensure_root()
+    api = MihomoAPI(SOCKET_PATH)
+    probe = probe_connectivity()
+    event_dir = capture_snapshot(api, "manual", "snapshot", probe)
+    print(event_dir)
+    return 0
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    run_parser = subparsers.add_parser("run", help="run one watchdog tick")
+    run_parser.add_argument("--force-probe", action="store_true")
+    run_parser.add_argument("--dry-run", action="store_true")
+    subparsers.add_parser("status", help="show local watchdog and TUN state")
+    subparsers.add_parser("capture", help="capture a read-only manual snapshot")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    if args.command == "run":
+        return run_watchdog(force_probe=args.force_probe, dry_run=args.dry_run)
+    if args.command == "status":
+        return status()
+    if args.command == "capture":
+        return manual_capture()
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
