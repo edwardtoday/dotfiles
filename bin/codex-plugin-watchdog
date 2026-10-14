@@ -1,0 +1,113 @@
+#!/opt/homebrew/bin/python3
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import tempfile
+import time
+import tomllib
+import subprocess
+
+
+def repair(config: Path, home: Path) -> str:
+    target = config.resolve(strict=True)
+    before = target.read_bytes()
+    parsed = tomllib.loads(before.decode('utf-8'))
+    entry = parsed.get('marketplaces', {}).get('openai-bundled', {})
+    expected = home / '.tmp/bundled-marketplaces/openai-bundled'
+    if entry.get('source') == str(expected):
+        return 'healthy'
+    if (entry.get('source_type') != 'local'
+            or str(expected.resolve()) == str(expected)
+            or entry.get('source') != str(expected.resolve())):
+        return 'skipped-unrecognized-config'
+    if not (expected / '.agents/plugins/marketplace.json').is_file():
+        return 'skipped-missing-marketplace'
+    text = before.decode('utf-8')
+    section = re.search(r'^\[marketplaces\.openai-bundled\][ \t]*(?:#[^\r\n]*)?\r?\n(?P<body>.*?)(?=^\[|\Z)', text, re.M | re.S)
+    if section is None:
+        return 'skipped-unrecognized-layout'
+    body, count = re.subn(r'^(source[ \t]*=[ \t]*)(?:"[^"\r\n]*"|\x27[^\x27\r\n]*\x27)([ \t]*(?:#[^\r\n]*)?)(\r?)$',
+                           lambda m: m[1] + json.dumps(str(expected)) + m[2] + m[3],
+                           section['body'], flags=re.M)
+    if count != 1:
+        return 'skipped-unrecognized-layout'
+    after = (text[:section.start('body')] + body + text[section.end('body'):]).encode('utf-8')
+    changed = tomllib.loads(after.decode('utf-8'))
+    parsed['marketplaces']['openai-bundled']['source'] = str(expected)
+    if changed != parsed:
+        raise ValueError('unexpected semantic change')
+    stat = target.stat()
+    name = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=target.parent, prefix='.plugin-watchdog-', delete=False) as out:
+            name = out.name
+            os.fchmod(out.fileno(), stat.st_mode & 0o777)
+            out.write(after)
+            out.flush()
+            os.fsync(out.fileno())
+        # 不覆盖检查期间已经发生的配置写入；下次轮询重试。
+        if config.resolve() != target or target.read_bytes() != before or target.stat().st_ino != stat.st_ino:
+            return 'deferred-concurrent-write'
+        os.replace(name, target)
+        name = None
+        if target.read_bytes() != after:
+            return 'deferred-post-write-change'
+        return 'repaired sha256=' + hashlib.sha256(after).hexdigest()
+    finally:
+        if name is not None:
+            Path(name).unlink(missing_ok=True)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--home', type=Path, default=Path.home() / '.codex')
+    parser.add_argument('--state-dir', type=Path, default=Path.home() / 'Library/Logs/codex-plugin-watchdog')
+    args = parser.parse_args()
+    args.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with (args.state_dir / 'lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return 0
+        try:
+            result = repair(args.home / 'config.toml', args.home)
+            if result == 'healthy':
+                codex = Path('/Applications/ChatGPT.app/Contents/Resources/codex')
+                probe = subprocess.run(
+                    [str(codex), 'plugin', 'list', '--marketplace', 'openai-bundled', '--json'],
+                    capture_output=True, text=True, timeout=20, check=False,
+                )
+                if probe.returncode != 0:
+                    result = 'plugin-probe-failed'
+                else:
+                    data = json.loads(probe.stdout)
+                    computer = next((item for item in data.get('installed', []) if item.get('name') == 'computer-use'), None)
+                    if computer is None:
+                        install = subprocess.run(
+                            [str(codex), 'plugin', 'add', 'computer-use@openai-bundled', '--json'],
+                            capture_output=True, text=True, timeout=60, check=False,
+                        )
+                        result = 'installed-computer-use' if install.returncode == 0 else 'install-failed'
+                    elif not computer.get('enabled', False):
+                        result = 'computer-use-disabled'
+        except (OSError, ValueError) as exc:
+            result = 'error:' + type(exc).__name__
+        status = args.state_dir / 'status.json'
+        previous = json.loads(status.read_text()) if status.exists() else {}
+        now = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+        if result != previous.get('result') or result.startswith('repaired'):
+            log = args.state_dir / 'events.log'
+            if log.exists() and log.stat().st_size > 1_000_000:
+                os.replace(log, args.state_dir / 'events.previous.log')
+            with log.open('a') as out:
+                out.write(now + ' ' + result + '\n')
+        status.write_text(json.dumps({'checked_at': now, 'result': result}) + '\n')
+        return 1 if result.startswith('error:') else 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

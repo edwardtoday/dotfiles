@@ -1,0 +1,154 @@
+#!/opt/homebrew/bin/python3
+"""codex-remote 运行锁守护。
+
+上游 kxn/codex-remote-feishu 的 internal/runtime/lock.go::clearStaleLock() 仅用
+processAlive(record.PID) 判断 relayd.lock 是否仍被持有，有两条路径会永久卡死：
+
+  1. 持有者被强杀（SIGKILL、断电、launchd 退出超时）后 PID 被系统复用，
+     存活的无关进程被误判成锁持有者；
+  2. 锁文件被截断成非法 JSON 时返回错误而不是清理。
+
+两种情况都会让 daemon 反复以 "lock held by another process" 退出，
+再被 launchd 的 KeepAlive 放大成每 10 秒一次的崩溃循环（日志刷屏、服务全程不可用）。
+
+本守护只做一件事：服务已加载、daemon 未运行、且锁确实陈旧时，把锁隔离备份后移除，
+重启交给 launchd 的 KeepAlive。有效锁、以及被主动卸载的服务，一律不碰。
+"""
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import re
+import shutil
+import subprocess
+import time
+from pathlib import Path
+
+LAUNCHCTL = '/bin/launchctl'
+PS = '/bin/ps'
+DEFAULT_LABEL = 'com.codex-remote.service'
+# 锁持有者的命令行里必须出现它，用于识别 PID 是否被无关进程复用。
+PROCESS_MARKER = 'codex-remote'
+
+
+def launchd_state(label: str) -> tuple[str, int]:
+    """返回 (state, pid)，state 为 not-loaded / not-running / running。"""
+    proc = subprocess.run([LAUNCHCTL, 'list', label], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return 'not-loaded', 0
+    match = re.search(r'"PID"\s*=\s*(\d+)\s*;', proc.stdout)
+    if match is None:
+        return 'not-running', 0
+    return 'running', int(match.group(1))
+
+
+def process_command(pid: int) -> str | None:
+    """进程存活则返回命令行，否则 None。"""
+    if pid <= 0:
+        return None
+    proc = subprocess.run([PS, '-p', str(pid), '-o', 'command='], capture_output=True, text=True)
+    command = proc.stdout.strip()
+    return command or None
+
+
+def is_codex_remote(pid: int) -> bool:
+    command = process_command(pid)
+    return command is not None and PROCESS_MARKER in command
+
+
+def read_pid(path: Path) -> int:
+    try:
+        return int(path.read_text().strip())
+    except (OSError, ValueError):
+        return 0
+
+
+def lock_is_stale(path: Path) -> bool | None:
+    """None 表示当前没有锁；True 表示陈旧可清理；False 表示仍被有效持有。"""
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return None  # 状态不可读时不冒险清理
+    try:
+        record = json.loads(raw)
+        pid = int(record.get('pid', 0))
+    except (ValueError, AttributeError, TypeError):
+        return True  # 截断或损坏的锁文件同样会让 daemon 永久卡死
+    if pid <= 0:
+        return True
+    if process_command(pid) is None:
+        return True  # 持有者已退出
+    return not is_codex_remote(pid)  # PID 被复用给了无关进程
+
+
+def quarantine(path: Path, directory: Path, stamp: str) -> Path:
+    """先在隔离目录留档再移除，保证可追溯、可回滚。"""
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    target = directory / f'{path.name}.{stamp}'
+    shutil.copy2(path, target)
+    path.unlink()
+    return target
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--label', default=DEFAULT_LABEL)
+    parser.add_argument('--state-dir', type=Path, default=Path.home() / '.local/state/codex-remote')
+    parser.add_argument('--log-dir', type=Path, default=Path.home() / 'Library/Logs/codex-remote-lock-guard')
+    parser.add_argument('--dry-run', action='store_true')
+    args = parser.parse_args()
+
+    args.log_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    lock_path = args.state_dir / 'relayd.lock'
+    pid_path = args.state_dir / 'codex-remote-relayd.pid'
+
+    try:
+        with (args.log_dir / 'guard.lock').open('a') as guard:
+            try:
+                fcntl.flock(guard, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return 0  # 上一轮还在跑
+
+            state, pid = launchd_state(args.label)
+            if state == 'not-loaded':
+                result = 'service-not-loaded'
+            elif state == 'running':
+                result = f'healthy pid={pid}'
+            else:
+                stale = lock_is_stale(lock_path)
+                if stale is None:
+                    result = 'no-lock'  # 启动窗口，交给 launchd 自行重试
+                elif not stale:
+                    result = 'lock-live'  # 有有效持有者，不动
+                elif args.dry_run:
+                    result = 'would-repair'
+                else:
+                    stamp = time.strftime('%Y%m%dT%H%M%S')
+                    removed = [str(quarantine(lock_path, args.log_dir / 'quarantine', stamp))]
+                    if pid_path.is_file() and not is_codex_remote(read_pid(pid_path)):
+                        removed.append(str(quarantine(pid_path, args.log_dir / 'quarantine', stamp)))
+                    subprocess.run([LAUNCHCTL, 'kickstart', f'gui/{os.getuid()}/{args.label}'], capture_output=True)
+                    result = 'repaired removed=' + ','.join(removed)
+    except (OSError, subprocess.SubprocessError) as exc:
+        result = 'error:' + type(exc).__name__
+
+    status = args.log_dir / 'status.json'
+    previous = json.loads(status.read_text()) if status.exists() else {}
+    now = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+    # 只在结果变化或真的动手时落日志，避免每分钟刷屏。
+    if result != previous.get('result') or result.startswith(('repaired', 'would-repair')):
+        log = args.log_dir / 'events.log'
+        if log.exists() and log.stat().st_size > 1_000_000:
+            os.replace(log, args.log_dir / 'events.previous.log')
+        with log.open('a') as out:
+            out.write(now + ' ' + result + '\n')
+    status.write_text(json.dumps({'checked_at': now, 'result': result}) + '\n')
+    return 1 if result.startswith('error:') else 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
